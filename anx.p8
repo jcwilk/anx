@@ -10,6 +10,65 @@ function trunc(n)
   return flr(n)
 end
 
+function bubble_sort(t,f)
+  if #t > 1 then
+    local do_pass = function()
+      local swp
+      for i=#t-1,1,-1 do
+        if f(t[i],t[i+1]) then
+          swp=t[i+1]
+          t[i+1] = t[i]
+          t[i] = swp
+        end
+      end
+      return swp
+    end
+    while do_pass() do
+    end
+  end
+end
+
+make_pool = function()
+  local store = {}
+  local id_counter = 0
+  local each = function(f,wrap_around)
+    for v in all(store) do
+      if v.alive then
+        f(v)
+      end
+    end
+  end
+  return {
+    each = each,
+    each_in_order = function(swap_if, f)
+      bubble_sort(store,swap_if)
+      each(f)
+    end,
+    store = store,
+    make = function(obj)
+      obj = obj or {}
+      obj.alive = true
+      local id = false
+
+      for k,v in pairs(store) do
+        if not v.alive then
+          id = k
+        end
+      end
+
+      if not id then
+        id_counter+= 1
+        id = id_counter
+      end
+      store[id] = obj
+      obj.kill = function()
+        obj.alive = false
+      end
+      return obj
+    end
+  }
+end
+
 makevec2d = (function()
   mt = {
    __add = function(a, b)
@@ -33,14 +92,17 @@ makevec2d = (function()
     return a.x == b.x and a.y == b.y
    end
   }
-  function vec2d_tostring(t)
+  local function vec2d_tostring(t)
    return "(" .. t.x .. ", " .. t.y .. ")"
   end
-  function magnitude(t)
+  local function magnitude(t)
    return sqrt(t.x*t.x+t.y*t.y)
   end
-  function bearing(t)
+  local function bearing(t)
    return makeangle(atan2(t.x,t.y))
+  end
+  local function diamond_distance(t)
+    return abs(t.x)+abs(t.y)
   end
   return function(x, y)
    local t = {
@@ -48,7 +110,8 @@ makevec2d = (function()
     y=y,
     tostring=vec2d_tostring,
     tobearing=bearing,
-    tomagnitude=magnitude
+    tomagnitude=magnitude,
+    diamond_distance=diamond_distance
    }
    setmetatable(t, mt)
    return t
@@ -103,14 +166,16 @@ makemobile = (function()
     local centered=(diffb+0.5).val-0.5
     local x=centered/range_of_field*2*64+64
     local scale=10/diffcmag --10 units away to be 1:1
-    local depth=sin((rel_bearing_to_p).val)*scale*2
-    x+=depth/2
-    depth=abs(depth)
+    local depthoffset=sin((rel_bearing_to_p).val)*scale
+    x+=depthoffset/2
+    depth=abs(depthoffset)
     local foreshortening = abs(cos((rel_bearing_to_p).val))
     local width=8*scale*foreshortening
     local height=16*scale
     local vx=x-width/2
     local vy=64-height/2
+    local spritex=8*(sprite_id%16)
+    local spritey=8*flr(sprite_id/16)
 
     local dp
     local color_translate_map = {
@@ -119,67 +184,91 @@ makemobile = (function()
       2,4,9,3,
       1,2,2,4
     }
-    local tilexo,tilexf,tileyo,tileyf
+    local tileyo,tileyf
     local startx,diffx
 
+    local facexo={}
+    local facexf={}
+    local sidexo={}
+    local sidexf={}
     local mute_radius=0.02
+    local calcxo,calcxf
+    local empty_col
+    local sprite_colors={}
+    local dxrev
 
-    print(rel_bearing_to_p.val)
-    for dy=0,15 do
-      tileyo=1+flr(vy+dy*height/16)
-      tileyf=flr(vy+(dy+1)*height/16)
+    if diffcmag > 5 then
+      for from,to in pairs(color_translate_map) do
+        pal(from,to)
+      end
+      sspr(spritex,spritey,8,16,vx-flr(mid(-width/8+1,depthoffset,width/8)),vy,width,height,reversed,false)
+      pal()
+      sspr(spritex,spritey,8,16,vx,vy,width,height,reversed,false)
+      return
+    end
+
+    for dx=0,7 do
+      if reversed then
+        dxrev=spritex+dx
+      else
+        dxrev=spritex+7-dx
+      end
+      sprite_colors[dx] = {}
+      for dy=0,15 do
+        sprite_colors[dx][dy]=sget(dxrev,spritey+dy)
+      end
 
       if (rel_bearing_to_p-0.5+mute_radius).val > mute_radius*2 then
-        palt(0,false)
-        if rel_bearing_to_p.val > 0.5 then
-          startx=15
-          diffx=-1
+        if rel_bearing_to_p.val > .5 then
+          calcxo=vx+dx*width/8-depth+1
+          calcxf=vx+dx*width/8
         else
-          startx=0
-          diffx=1
+          calcxo=vx+(dx+1)*width/8+1
+          calcxf=vx+(dx+1)*width/8+depth
         end
-        for dx=startx,startx+diffx*15,diffx do
-          if reversed then
-            dp=sget(dx,dy)
-          else
-            dp=sget(15-dx,dy)
-          end
-          if dp > 0 then
-            tilexf=flr(vx+dx*width/8)
-            tilexo=tilexf+1
-
-            if rel_bearing_to_p.val > .5 then
-              tilexo=flr(vx+dx*width/8-depth)+1
-              tilexf=flr(vx+dx*width/8)
-            else
-              tilexo=flr(vx+(dx+1)*width/8)+1
-              tilexf=flr(vx+(dx+1)*width/8+depth)
-            end
-            if tilexo <= tilexf then
-              rectfill(tilexo,tileyo,tilexf,tileyf,color_translate_map[dp])
-            end
-          end
+        if calcxo <= calcxf then
+          sidexo[dx]=calcxo
+          sidexf[dx]=calcxf
         end
-        palt()
       end
 
       if (rel_bearing_to_p-0.25-mute_radius).val < .5-mute_radius*2 then
-        --print((rel_bearing_to_p+0.2).val)
-        for dx=0,15 do
-          if reversed then
-            dp=sget(dx,dy)
-          else
-            dp=sget(15-dx,dy)
-          end
+        facexo[dx]=1+vx+dx*width/8
+        facexf[dx]=vx+(dx+1)*width/8
+      end
+    end
+
+    for dy=spritey,spritey+15 do
+      tileyo=1+flr(vy+dy*height/16)
+      tileyf=flr(vy+(dy+1)*height/16)
+
+      palt(0,false)
+      if rel_bearing_to_p.val > 0.5 then
+        startx=7
+        diffx=-1
+      else
+        startx=0
+        diffx=1
+      end
+      for dx=startx,startx+diffx*7,diffx do
+        if sidexo[dx] then
+          dp=sprite_colors[dx][dy]
           if dp > 0 then
-            tilexo=1+flr(vx+dx*width/8)
-            tilexf=flr(vx+(dx+1)*width/8)
-            rectfill(tilexo,tileyo,tilexf,tileyf,dp)
+            rectfill(sidexo[dx],tileyo,sidexf[dx],tileyf,color_translate_map[dp])
+          end
+        end
+      end
+      palt()
+
+      for dx=0,7 do
+        if facexo[dx] then
+          dp=sprite_colors[dx][dy]
+          if dp > 0 then
+            rectfill(facexo[dx],tileyo,facexf[dx],tileyf,dp)
           end
         end
       end
     end
-    --sspr(0,0,8,16,vx,vy,width,height,false,false)
   end
 
   local function draw_mobile(obj)
@@ -202,20 +291,21 @@ makemobile = (function()
   end
 end)()
 
-player = makemobile(false,makevec2d(0,0),makeangle(.75))
-dude = makemobile(0,makevec2d(0,5),makeangle(.33))
---dude2 = makemobile(0,makevec2d(1,6),makeangle(.66))
---dude3 = makemobile(0,makevec2d(-1,4),makeangle(0))
+mobile_pool = make_pool()
+player =makemobile(false,makevec2d(0,0),makeangle(.75))
+for i=0,50 do
+  mobile_pool.make(makemobile(1,makevec2d(rnd(8)-4,rnd(10)),makeangle(rnd())))
+end
 
 function _update()
   local offset = makevec2d(0,0)
   local facing = player.bearing:tovector()
   local right = makevec2d(facing.y,-facing.x)
   if btn(0) then
-    offset-=right
+    player.bearing-=0.005
   end
   if btn(1) then
-    offset+=right
+    player.bearing+=0.005
   end
   if btn(2) then
     offset+=facing
@@ -224,38 +314,63 @@ function _update()
     offset-=facing
   end
   if btn(4) then
-    player.bearing-=0.005
+    offset-=right
   end
   if btn(5) then
-    player.bearing+=0.005
+    offset+=right
   end
   player.coords+=offset*0.1
+  mobile_pool.each(function(m)
+    m.bearing+=0.01
+  end)
+end
+
+function draw_stars()
+  local x,y,angle
+  color(7)
+  angle=player.bearing-1/16
+  local init=flr(angle.val*100)
+  local final=flr((angle.val+1/8)*100)
+  print(init)
+  for i=init,final do
+    pset((i-init)/100*8*128,((i*19)%64))
+  end
 end
 
 function _draw()
-  cls()
-  dude:draw()
+  rectfill(0,0,127,63,1)
+  rectfill(0,64,127,127,3)
+  draw_stars()
+  mobile_pool.each_in_order(function(a,b)
+    return (a.coords-player.coords):diamond_distance() < (b.coords-player.coords):diamond_distance()
+  end, function(m)
+    m:draw()
+  end)
+  color(12)
+  cursor(0,0)
+  print(stat(1))
+  --dude:draw()
   --dude2:draw()
   --dude3:draw()
 end
 
 __gfx__
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000a00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00aaa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00fff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0f0f0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00fff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-06666600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-66666660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-60666060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-60666060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-60999060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00ccc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00c0c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00c0c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00909000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000007770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000a00007770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00aaa0000a777a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00fff00000fff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0f0f0f000f0f0f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00fff00000f8f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000f0000000f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+06666600066666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+66666660666666600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+60666060606660600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+60666060606660600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+60999060609990600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00ccc000009999000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00c0c000009999000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00c0c00000f0f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00909000008080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
