@@ -171,31 +171,21 @@ makemobile = (function()
     depth=abs(depthoffset)
     local foreshortening = abs(cos((rel_bearing_to_p).val))
     local width=8*scale*foreshortening
+    if x >= 128 or x+width <= 0 then --it's offscreen
+      return
+    end
     local height=16*scale
     local vx=x-width/2
     local vy=64-height/2
     local spritex=8*(sprite_id%16)
     local spritey=8*flr(sprite_id/16)
 
-    local dp
     local color_translate_map = {
       0,1,2,
       2,1,5,6,
       2,4,9,3,
       1,2,2,4
     }
-    local tileyo,tileyf
-    local startx,diffx
-
-    local facexo={}
-    local facexf={}
-    local sidexo={}
-    local sidexf={}
-    local mute_radius=0.02
-    local calcxo,calcxf
-    local empty_col
-    local sprite_colors={}
-    local dxrev
 
     if diffcmag > 5 then
       for from,to in pairs(color_translate_map) do
@@ -206,6 +196,19 @@ makemobile = (function()
       sspr(spritex,spritey,8,16,vx,vy,width,height,reversed,false)
       return
     end
+
+    local dp
+    local tileyo,tileyf
+    local startx,diffx
+    local facexo={}
+    local facexf={}
+    local sidexo={}
+    local sidexf={}
+    local mute_radius=0.02
+    local calcxo,calcxf
+    local empty_col
+    local sprite_colors={}
+    local dxrev
 
     for dx=0,7 do
       if reversed then
@@ -294,7 +297,7 @@ end)()
 mobile_pool = make_pool()
 player =makemobile(false,makevec2d(0,0),makeangle(.75))
 for i=0,50 do
-  mobile_pool.make(makemobile(1,makevec2d(rnd(8)-4,rnd(10)),makeangle(rnd())))
+  mobile_pool.make(makemobile(flr(rnd(2)),makevec2d(rnd(8)-4,rnd(10)),makeangle(rnd())))
 end
 
 function _update()
@@ -320,9 +323,9 @@ function _update()
     offset+=right
   end
   player.coords+=offset*0.1
-  mobile_pool.each(function(m)
-    m.bearing+=0.01
-  end)
+  -- mobile_pool.each(function(m)
+  --   m.bearing+=0.01
+  -- end)
 end
 
 function draw_stars()
@@ -331,7 +334,6 @@ function draw_stars()
   angle=player.bearing-1/16
   local init=flr(angle.val*100)
   local final=flr((angle.val+1/8)*100)
-  print(init)
   for i=init,final do
     pset((i-init)/100*8*128,((i*19)%64))
   end
