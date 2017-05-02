@@ -425,26 +425,99 @@ function draw_walls()
   else
     next_row=makevec2d(0,towinf(pv.y))
   end
-  local init_spot = makevec2d(flr(player.coords.x+0.5),flr(player.coords.y+0.5))
-  local current_spot,sprite_id,wtopraw,wtop
+
   wall_pool=make_pool()
-  local cx,cy
-  for row=12,0,-1 do
-    for col=-row-3,row+3 do
-      --current_spot=init_spot + row*next_row + col*next_col
-      cx=init_spot.x+row*next_row.x+col*next_col.x
-      cy=init_spot.y+row*next_row.y+col*next_col.y
-      --spr(3,current_spot.x*8,-current_spot.y*8)
-      sprite_id=mget(cx,-cy)
-      if sprite_id > 0 then
-        wall_pool.make(makewall(sprite_id,makevec2d(cx,cy)))
-        -- if(mget(current_spot.x,current_spot.y+wtop.y) == 0) then
-        --   draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+wtop.y/2),wtopraw:tobearing()-makevec2d(0,wtop.y):tobearing(),false,true)
-        -- end
-        --spr(sprite_id,current_spot.x*8,-current_spot.y*8)
+  local nearby_walls={}
+  local queue={{flr(player.coords.x+0.5)-next_row.x,flr(player.coords.y+0.5)-next_row.y}}
+  local qi=0
+  local seen_walls={}
+  seen_walls[queue[1][1]]={}
+  seen_walls[queue[1][1]][queue[1][2]]=true
+  local current_spot
+  local x,y,cx,cy
+  local sprite_id
+  local first=true
+  while qi < #queue do
+    qi+=1
+    cx=queue[qi][1]
+    cy=queue[qi][2]
+    sprite_id=mget(cx,-cy)
+    if not first and sprite_id > 0 then
+      current_spot=makevec2d(cx,cy)
+      add(nearby_walls,makewall(sprite_id,current_spot))
+    else
+      first=false
+      for col=-2,2 do
+        x=cx+next_row.x+col*next_col.x
+        y=cy+next_row.y+col*next_col.y
+        seen_walls[x]=seen_walls[x] or {}
+        if not seen_walls[x][y] then
+          seen_walls[x][y]=true
+          if abs(x-player.coords.x)+abs(y-player.coords.y) < 12 then
+            add(queue,{x,y})
+          end
+        end
       end
     end
   end
+  for i=#nearby_walls,1,-1 do
+    wall_pool.make(nearby_walls[i])
+  end
+
+
+  --   seen_walls[x]=seen_walls[x] or {}
+  --   if seen_walls[x][y] then
+  --     return
+  --   end
+  --   seen_walls[x][y]=true
+
+  --   current_spot=makevec2d(x,y)
+
+  -- end
+  -- local function explore_xy(x,y)
+  --   seen_walls[x]=seen_walls[x] or {}
+  --   if seen_walls[x][y] then
+  --     return
+  --   end
+  --   seen_walls[x][y]=true
+
+  --   if (current_spot-player.coords):diamond_distance() > 12 then
+  --     return
+  --   end
+
+  --   local mv=mget(x,-y)
+  --   if mv == 0 then
+  --     for col=-4,4 do
+  --       explore_xy(x+next_row.x+col*next_col.x,y+next_row.y+col*next_col.y)
+  --     end
+  --   else
+  --     wall_pool.make(makewall(mv,current_spot))
+  --   end
+  -- end
+  -- explore_xy(flr(player.coords.x+0.5),flr(player.coords.y+0.5))
+
+
+
+  -- local init_spot = makevec2d(flr(player.coords.x+0.5),flr(player.coords.y+0.5))
+  -- local current_spot,sprite_id,wtopraw,wtop
+  -- wall_pool=make_pool()
+  -- local cx,cy
+  -- for row=12,0,-1 do
+  --   for col=-row-3,row+3 do
+  --     --current_spot=init_spot + row*next_row + col*next_col
+  --     cx=init_spot.x+row*next_row.x+col*next_col.x
+  --     cy=init_spot.y+row*next_row.y+col*next_col.y
+  --     --spr(3,current_spot.x*8,-current_spot.y*8)
+  --     sprite_id=mget(cx,-cy)
+  --     if sprite_id > 0 then
+  --       wall_pool.make(makewall(sprite_id,makevec2d(cx,cy)))
+  --       -- if(mget(current_spot.x,current_spot.y+wtop.y) == 0) then
+  --       --   draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+wtop.y/2),wtopraw:tobearing()-makevec2d(0,wtop.y):tobearing(),false,true)
+  --       -- end
+  --       --spr(sprite_id,current_spot.x*8,-current_spot.y*8)
+  --     end
+  --   end
+  -- end
   --spr(0,init_spot.x*8,-init_spot.y*8)
   --spr(1,(init_spot+next_row).x*8,-(init_spot+next_row).y*8)
 end
