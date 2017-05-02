@@ -114,13 +114,17 @@ makevec2d = (function()
    return sqrt(t.x*t.x+t.y*t.y)
   end
   local function bearing(t)
-   return makeangle(atan2(t.x,t.y))
+   return makeangle(atan2(t.x,t.y))+.25
   end
   local function diamond_distance(t)
     return abs(t.x)+abs(t.y)
   end
   local function normalize(t)
     return t/t:magnitude()
+  end
+  local function project_onto(t,direction)
+    local dir_mag=direction:tomagnitude()
+    return ((direction*t)/(dir_mag*dir_mag))*direction
   end
   return function(x, y)
    local t = {
@@ -129,7 +133,8 @@ makevec2d = (function()
     tostring=vec2d_tostring,
     tobearing=bearing,
     tomagnitude=magnitude,
-    diamond_distance=diamond_distance
+    diamond_distance=diamond_distance,
+    project_onto=project_onto
    }
    setmetatable(t, mt)
    return t
@@ -149,7 +154,7 @@ makeangle = (function()
 
       if val < 0 then
         val = abs(flr(val))+val
-      elseif val > 1 then
+      elseif val >= 1 then
         val = val%1
       end
       return makeangle(val)
@@ -163,7 +168,7 @@ makeangle = (function()
     end
   }
   local function angle_tovector(a)
-    return makevec2d(cos(a.val),sin(a.val))
+    return makevec2d(cos(a.val-.25),sin(a.val-.25))
   end
   return function(angle)
     local t={
@@ -175,28 +180,46 @@ makeangle = (function()
   end
 end)()
 
-function draw_sprite(sprite_id,coords,rel_bearing_to_p,reversed,flat)
-  if rel_bearing_to_p.val < 0.25 or rel_bearing_to_p.val > 0.75 then
-    rel_bearing_to_p+=0.5
+function draw_sprite(sprite_id,coords,bearing,reversed,flat)
+  local rel_bearing_to_p=(player.coords-coords):tobearing()-bearing
+  if rel_bearing_to_p.val > 0.25 and rel_bearing_to_p.val < 0.75 then
+    rel_bearing_to_p+=.5
+    bearing+=.5
     reversed=not reversed
   end
-  local diffc=coords-player.coords
-  local diffcmag=abs(diffc:tomagnitude())
-  local diffb=diffc:tobearing()-player.bearing
+
   local range_of_field=1/8 -- 45*
-  local centered=(diffb+0.5).val-0.5
-  local x=centered/range_of_field*2*64+64
-  local scale=25/diffcmag --22 units away to be 1:1
-  local depthoffset=sin((rel_bearing_to_p).val)*scale
-  x+=depthoffset/2
-  depth=abs(depthoffset)
-  local foreshortening = abs(cos((rel_bearing_to_p).val))
-  local width=8*scale*foreshortening
-  if x-width >= 128 or x+width <= 0 or diffcmag < 0.6 then --it's offscreen or too close
+
+  -- print(rel_bearing_to_p.val)
+
+  --local bearing=diffc:tobearing()-.5-rel_bearing_to_p
+  -- print(bearing.val)
+  local width_vector=(bearing-.25):tovector()
+  local left_coords=coords-width_vector/2
+  local left_rel_bearing=(left_coords-player.coords):tobearing()-player.bearing
+  local vx=flr(((left_rel_bearing+.5).val-.5)/range_of_field*64+64)
+  if vx >= 128 then
     return
   end
-  local height=16*scale
-  local vx=x-width/2
+
+  local right_coords=left_coords+width_vector
+  local right_rel_bearing=(right_coords-player.coords):tobearing()-player.bearing
+  local width=flr(((right_rel_bearing+.5).val-.5)/range_of_field*64+64)-vx
+  if vx+width < 0 then
+    return
+  end
+
+  --local scale=width/width_vector:project_onto((player.bearing+0.25):tovector()):tomagnitude()
+  local distance=(coords-player.coords):tomagnitude()
+  local scale=80/distance
+  local depthoffset=sin((rel_bearing_to_p).val)/8*scale
+  local depth=abs(depthoffset)
+
+  if not flat then
+    vx-=depthoffset/2
+  end
+
+  local height=scale*2
   local vy=64-height*.4
   local spritex=8*(sprite_id%16)
   local spritey=8*flr(sprite_id/16)
@@ -208,7 +231,7 @@ function draw_sprite(sprite_id,coords,rel_bearing_to_p,reversed,flat)
     1,2,4,4
   }
 
-  if flat or diffcmag > 5 then
+  if flat or distance > 5 then
     --todo - better organize/share the color 14 logic?
     palt(14,not reversed)
     if not flat then
@@ -251,8 +274,8 @@ function draw_sprite(sprite_id,coords,rel_bearing_to_p,reversed,flat)
       sprite_colors[dx][dy]=sget(dxrev,spritey+dy)
     end
 
-    if (rel_bearing_to_p-0.5+mute_radius).val > mute_radius*2 then
-      if rel_bearing_to_p.val > .5 then
+    if (rel_bearing_to_p+mute_radius/2).val > mute_radius then
+      if rel_bearing_to_p.val < .5 then
         calcxo=vx+dx*width/8-depth+1
         calcxf=vx+dx*width/8
       else
@@ -265,7 +288,7 @@ function draw_sprite(sprite_id,coords,rel_bearing_to_p,reversed,flat)
       end
     end
 
-    if (rel_bearing_to_p-0.25-mute_radius).val < .5-mute_radius*2 then
+    if rel_bearing_to_p.val < .25-mute_radius/2 or rel_bearing_to_p.val > .75+mute_radius/2 then
       facexo[dx]=1+vx+dx*width/8
       facexf[dx]=vx+(dx+1)*width/8
     end
@@ -276,7 +299,7 @@ function draw_sprite(sprite_id,coords,rel_bearing_to_p,reversed,flat)
     tileyf=flr(vy+(dy+1)*height/16)
 
     palt(0,false)
-    if rel_bearing_to_p.val > 0.5 then
+    if rel_bearing_to_p.val < 0.5 then
       startx=7
       diffx=-1
     else
@@ -307,9 +330,7 @@ end
 
 makemobile = (function()
   local function draw_mobile(obj)
-    local rel_bearing_to_p=(player.coords-obj.coords):tobearing()-obj.bearing
-    local reversed=false
-    draw_sprite(obj.sprite_id,obj.coords,rel_bearing_to_p,reversed)
+    draw_sprite(obj.sprite_id,obj.coords,obj.bearing,false)
   end
 
   return function(sprite_id,coords,bearing)
@@ -332,23 +353,23 @@ function draw_walls()
     next_row=makevec2d(0,towinf(pv.y))
   end
   local init_spot = makevec2d(flr(player.coords.x+0.5),flr(player.coords.y+0.5))
-  local current_spot,sprite_id,vtop
+  local current_spot,sprite_id,wtopraw,wtop
   for row=12,0,-1 do
-    for col=-row-2,row+2 do
+    for col=-row-3,row+3 do
       current_spot=init_spot + row*next_row + col*next_col
       --spr(3,current_spot.x*8,-current_spot.y*8)
       sprite_id=mget(current_spot.x,-current_spot.y)
       if sprite_id > 0 then
-        vtopraw=player.coords-current_spot
-        vtop=makevec2d(mid(-1,1,towinf(vtopraw.x)),mid(-1,1,towinf(vtopraw.y))) --fix me!
-        if(mget(current_spot.x+vtop.x,-current_spot.y) == 0) then
-          draw_sprite(sprite_id,makevec2d(current_spot.x+vtop.x*.5,current_spot.y),vtopraw:tobearing()-makevec2d(vtop.x,0):tobearing(),false,true)
+        wtopraw=player.coords-current_spot
+        wtop=makevec2d(mid(-1,1,towinf(wtopraw.x)),mid(-1,1,towinf(wtopraw.y))) --fix me!
+        if(mget(current_spot.x+wtop.x,-current_spot.y) == 0) then
+          draw_sprite(sprite_id,makevec2d(current_spot.x+wtop.x*.5,current_spot.y),makevec2d(wtop.x,0):tobearing(),false,true)
         end
-        if(mget(current_spot.x,-current_spot.y-vtop.y) == 0) then
-          draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+vtop.y*.5),vtopraw:tobearing()-makevec2d(0,vtop.y):tobearing(),false,true)
+        if(mget(current_spot.x,-current_spot.y-wtop.y) == 0) then
+          draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+wtop.y*.5),makevec2d(0,wtop.y):tobearing(),false,true)
         end
-        -- if(mget(current_spot.x,current_spot.y+vtop.y) == 0) then
-        --   draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+vtop.y/2),vtopraw:tobearing()-makevec2d(0,vtop.y):tobearing(),false,true)
+        -- if(mget(current_spot.x,current_spot.y+wtop.y) == 0) then
+        --   draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+wtop.y/2),wtopraw:tobearing()-makevec2d(0,wtop.y):tobearing(),false,true)
         -- end
         --spr(sprite_id,current_spot.x*8,-current_spot.y*8)
       end
@@ -359,12 +380,12 @@ function draw_walls()
 end
 
 mobile_pool = make_pool()
-player =makemobile(false,makevec2d(2,-2),makeangle(1/8))
+player =makemobile(false,makevec2d(3,-3),makeangle(-1/8))
 -- for i=0,2 do
 --   mobile_pool.make(makemobile(flr(rnd(2)),makevec2d(rnd(8),-rnd(10)),makeangle(rnd())))
 -- end
-mobile_pool.make(makemobile(0,makevec2d(3,-3),makeangle(rnd())))
-mobile_pool.make(makemobile(1,makevec2d(4,-4),makeangle(rnd())))
+mobile_pool.make(makemobile(0,makevec2d(2,-2),makeangle(-1/8)))
+--mobile_pool.make(makemobile(1,makevec2d(4,-4),makeangle(rnd())))
 
 function _update()
   local offset = makevec2d(0,0)
@@ -425,7 +446,7 @@ end
 function _draw()
   rectfill(0,0,127,63,7)
   rectfill(0,64,127,127,2)
-  rectfill(0,52,127,80,1)
+  rectfill(0,58,127,70,1)
   --draw_stars()
   draw_walls()
   mobile_pool.each_in_order(function(a,b)
