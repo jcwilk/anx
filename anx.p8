@@ -22,64 +22,113 @@ function round(n)
   return flr(n+0.5)
 end
 
-function bubble_sort(t,f)
-  if #t > 1 then
-    local do_pass = function()
-      local swp
-      for i=#t-1,1,-1 do
-        if f(t[i],t[i+1]) then
-          swp=t[i+1]
-          t[i+1] = t[i]
-          t[i] = swp
+make_pool = (function()
+  local function bubble_sort(t,f)
+    if #t > 1 then
+      local do_pass = function()
+        local swp
+        for i=#t-1,1,-1 do --ascending
+          if f(t[i],t[i+1]) then
+            swp=t[i+1]
+            t[i+1] = t[i]
+            t[i] = swp
+          end
         end
+        return swp
       end
-      return swp
-    end
-    while do_pass() do
+      while do_pass() do
+      end
     end
   end
-end
 
-make_pool = function()
-  local store = {}
-  local id_counter = 0
-  local each = function(f,wrap_around)
-    for v in all(store) do
+  local function zip_with(pool,pool2)
+    local t1=pool.store
+    local t2=pool2.store
+    local t3={}
+    local t1i=1
+    local t2i=1
+    local t1v,t2v
+    while t1i <= #t1 or t2i <= #t2 do
+      if t1i <= #t1 then
+        t1v=t1[t1i]._sort_value
+      else
+        t1v=false
+      end
+      if t2i <= #t2 then
+        t2v=t2[t2i]._sort_value
+      else
+        t2v=false
+      end
+      -- print(t1v)
+      -- print(t2v)
+      if not t2v or (t1v and t1v > t2v) then
+        add(t3,t1[t1i])
+        t1i+=1
+      else
+        add(t3,t2[t2i])
+        t2i+=1
+      end
+    end
+    return make_pool(t3)
+  end
+
+  local function each(pool,f)
+    for v in all(pool.store) do
       if v.alive then
         f(v)
       end
     end
   end
-  return {
-    each = each,
-    each_in_order = function(swap_if, f)
-      bubble_sort(store,swap_if)
-      each(f)
-    end,
-    store = store,
-    make = function(obj)
-      obj = obj or {}
-      obj.alive = true
-      local id = false
 
-      for k,v in pairs(store) do
-        if not v.alive then
-          id = k
+  local function sort_by(pool,sort_value_f)
+    pool:each(function(m)
+      m._sort_value=sort_value_f(m)
+    end)
+
+    bubble_sort(pool.store,function(a,b)
+      return a._sort_value < b._sort_value
+    end)
+  end
+
+  return function(store)
+    store = store or {}
+    local id_counter = 0
+    return {
+      each = each,
+      sort_by = sort_by,
+      -- sort_with = function(swap_if)
+      --   bubble_sort(store,swap_if)
+      -- end,
+      -- each_in_order = function(swap_if, f)
+      --   bubble_sort(store,swap_if)
+      --   each(f)
+      -- end,
+      zip_with = zip_with,
+      store = store,
+      make = function(obj)
+        obj = obj or {}
+        obj.alive = true
+        local id = false
+
+        for k,v in pairs(store) do
+          if not v.alive then
+            id = k
+          end
         end
-      end
 
-      if not id then
-        id_counter+= 1
-        id = id_counter
+        if not id then
+          id_counter+= 1
+          id = id_counter
+        end
+        store[id] = obj
+        obj.kill = function()
+          obj.alive = false
+        end
+        return obj
       end
-      store[id] = obj
-      obj.kill = function()
-        obj.alive = false
-      end
-      return obj
-    end
-  }
-end
+    }
+  end
+end)()
 
 makevec2d = (function()
   mt = {
@@ -211,6 +260,9 @@ function draw_sprite(sprite_id,coords,bearing,reversed,flat)
 
   --local scale=width/width_vector:project_onto((player.bearing+0.25):tovector()):tomagnitude()
   local distance=(coords-player.coords):tomagnitude()
+  if distance < .3 then
+    return
+  end
   local scale=80/distance
   local depthoffset=sin((rel_bearing_to_p).val)/8*scale
   local depth=abs(depthoffset)
@@ -343,6 +395,27 @@ makemobile = (function()
   end
 end)()
 
+makewall = (function()
+  local function draw_wall(obj)
+    local wtopraw=player.coords-obj.coords
+    local wtop=makevec2d(mid(-1,1,round(wtopraw.x)),mid(-1,1,round(wtopraw.y))) --fix me!
+    if wtop.x != 0 and mget(obj.coords.x+wtop.x,-obj.coords.y) == 0 then
+      draw_sprite(obj.sprite_id,makevec2d(obj.coords.x+wtop.x*.5,obj.coords.y),makevec2d(wtop.x,0):tobearing(),false,true)
+    end
+    if wtop.y != 0 and mget(obj.coords.x,-obj.coords.y-wtop.y) == 0 then
+      draw_sprite(obj.sprite_id,makevec2d(obj.coords.x,obj.coords.y+wtop.y*.5),makevec2d(0,wtop.y):tobearing(),false,true)
+    end
+  end
+
+  return function(sprite_id,coords)
+    return {
+      sprite_id=sprite_id,
+      coords=coords,
+      draw=draw_wall
+    }
+  end
+end)()
+
 function draw_walls()
   local pv=player.bearing:tovector()
   local next_col=makevec2d(flr(pv.y+0.5),-flr(pv.x+0.5))
@@ -354,20 +427,17 @@ function draw_walls()
   end
   local init_spot = makevec2d(flr(player.coords.x+0.5),flr(player.coords.y+0.5))
   local current_spot,sprite_id,wtopraw,wtop
+  wall_pool=make_pool()
+  local cx,cy
   for row=12,0,-1 do
     for col=-row-3,row+3 do
-      current_spot=init_spot + row*next_row + col*next_col
+      --current_spot=init_spot + row*next_row + col*next_col
+      cx=init_spot.x+row*next_row.x+col*next_col.x
+      cy=init_spot.y+row*next_row.y+col*next_col.y
       --spr(3,current_spot.x*8,-current_spot.y*8)
-      sprite_id=mget(current_spot.x,-current_spot.y)
+      sprite_id=mget(cx,-cy)
       if sprite_id > 0 then
-        wtopraw=player.coords-current_spot
-        wtop=makevec2d(mid(-1,1,towinf(wtopraw.x)),mid(-1,1,towinf(wtopraw.y))) --fix me!
-        if(mget(current_spot.x+wtop.x,-current_spot.y) == 0) then
-          draw_sprite(sprite_id,makevec2d(current_spot.x+wtop.x*.5,current_spot.y),makevec2d(wtop.x,0):tobearing(),false,true)
-        end
-        if(mget(current_spot.x,-current_spot.y-wtop.y) == 0) then
-          draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+wtop.y*.5),makevec2d(0,wtop.y):tobearing(),false,true)
-        end
+        wall_pool.make(makewall(sprite_id,makevec2d(cx,cy)))
         -- if(mget(current_spot.x,current_spot.y+wtop.y) == 0) then
         --   draw_sprite(sprite_id,makevec2d(current_spot.x,current_spot.y+wtop.y/2),wtopraw:tobearing()-makevec2d(0,wtop.y):tobearing(),false,true)
         -- end
@@ -380,6 +450,7 @@ function draw_walls()
 end
 
 mobile_pool = make_pool()
+wall_pool = make_pool()
 player =makemobile(false,makevec2d(3,-3),makeangle(-1/8))
 -- for i=0,2 do
 --   mobile_pool.make(makemobile(flr(rnd(2)),makevec2d(rnd(8),-rnd(10)),makeangle(rnd())))
@@ -443,17 +514,29 @@ function draw_stars()
   end
 end
 
+function sort_by_distance(m)
+  return (m.coords-player.coords):diamond_distance()
+end
+
 function _draw()
   rectfill(0,0,127,63,7)
   rectfill(0,64,127,127,2)
   rectfill(0,58,127,70,1)
   --draw_stars()
   draw_walls()
-  mobile_pool.each_in_order(function(a,b)
-    return (a.coords-player.coords):diamond_distance() < (b.coords-player.coords):diamond_distance()
-  end, function(m)
+  wall_pool:sort_by(sort_by_distance)
+  mobile_pool:sort_by(sort_by_distance)
+  all_pool=mobile_pool:zip_with(wall_pool)
+  all_pool=wall_pool:zip_with(mobile_pool)
+  all_pool:each(function(m)
     m:draw()
   end)
+  -- mobile_pool:each(function(m)
+  --   m:draw()
+  -- end)
+  -- wall_pool:each(function(m)
+  --   m:draw()
+  -- end)
   color(12)
   cursor(0,0)
   print(stat(1))
