@@ -210,9 +210,9 @@ makeangle = (function()
   end
 end)()
 
-field_of_view=1/10 -- 36*
+field_of_view=1/8 -- 45*
 draw_distance=12
-height_scale=12 -- multiplier for something at distance of one after dividing by field of view
+height_scale=20 -- multiplier for something at distance of one after dividing by field of view
 height_ratio=0.6
 function draw_sprite(sprite_id,coords,bearing,reversed,flat)
   local rel_bearing_to_p=(player.coords-coords):tobearing()-bearing
@@ -229,14 +229,14 @@ function draw_sprite(sprite_id,coords,bearing,reversed,flat)
   local width_vector=(bearing-.25):tovector()
   local left_coords=coords-width_vector/2
   local left_rel_bearing=(left_coords-player.coords):tobearing()-player.bearing
-  local vx=flr(((left_rel_bearing+.5).val-.5)/field_of_view*64+64)
+  local vx=flr(((left_rel_bearing+.5).val-.5)/field_of_view*2*64+64)
   if vx >= 128 then
     return
   end
 
   local right_coords=left_coords+width_vector
   local right_rel_bearing=(right_coords-player.coords):tobearing()-player.bearing
-  local width=flr(((right_rel_bearing+.5).val-.5)/field_of_view*64+64)-vx
+  local width=flr(((right_rel_bearing+.5).val-.5)/field_of_view*2*64+64)-vx
   if vx+width < 0 then
     return
   end
@@ -399,54 +399,186 @@ makewall = (function()
   end
 end)()
 
-function draw_walls()
-  local pv=player.bearing:tovector()
-  local next_col=makevec2d(flr(pv.y+0.5),-flr(pv.x+0.5))
-  local next_row
-  if abs(pv.x) > abs(pv.y) then
-    next_row=makevec2d(towinf(pv.x),0)
-  else
-    next_row=makevec2d(0,towinf(pv.y))
-  end
 
+function raycast_walls()
+  local pv
+  local slope
+  local seenwalls={}
+  local currx,curry,nextx,found,xdiff,ydiff,sprite_id,testy,testx,intx,inty
+  local cached_sprites={}
   wall_pool=make_pool()
-  local nearby_walls={}
-  local queue={{flr(player.coords.x+0.5)-next_row.x,flr(player.coords.y+0.5)-next_row.y}}
-  local qi=0
-  local seen_walls={}
-  seen_walls[queue[1][1]]={}
-  seen_walls[queue[1][1]][queue[1][2]]=true
-  local current_spot
-  local x,y,cx,cy
-  local sprite_id
-  local first=true
-  while qi < #queue do
-    qi+=1
-    cx=queue[qi][1]
-    cy=queue[qi][2]
-    sprite_id=mget(cx,-cy)
-    if not first and sprite_id > 0 then
-      current_spot=makevec2d(cx,cy)
-      add(nearby_walls,makewall(sprite_id,current_spot))
+  screenx=0
+  local alotted_time=.9-stat(1)
+  local start_time=stat(1)
+  while screenx<=127 do
+    draw_width=mid(1,5,flr((stat(1)-(screenx/127)*alotted_time+start_time)*20))
+    -- draw_width=screenx/127
+    -- draw_width=remaining_time/flr(stat(1)*3)+1
+  --for screenx=0,127,draw_width do
+    angle_offset=(screenx/127-.5)*field_of_view
+
+    pv=(player.bearing+angle_offset):tovector()
+    xdiff=towinf(pv.x)
+    ydiff=towinf(pv.y)
+    if abs(pv.x) < .001 then
+      slope = false
     else
-      first=false
-      for col=-2,2 do
-        x=cx+next_row.x+col*next_col.x
-        y=cy+next_row.y+col*next_col.y
-        seen_walls[x]=seen_walls[x] or {}
-        if not seen_walls[x][y] then
-          seen_walls[x][y]=true
-          if abs(x-player.coords.x)+abs(y-player.coords.y) < draw_distance then
-            add(queue,{x,y})
+      slope=pv.y/pv.x
+      slope_y_correction=player.coords.y-slope*player.coords.x
+    end
+    currx=round(player.coords.x)
+    curry=round(player.coords.y)
+    found=false
+    count=1
+    draw_stack={}
+    while not found and count <= draw_distance do
+      count+=1
+      reversed=false
+      if not slope then
+        curry+=ydiff
+        intx=player.coords.x
+        inty=curry-ydiff/2
+        if ydiff<0 then
+          reversed=true
+        end
+        --surface_fraction=(pv.x-.5)%1
+      else
+        nextx=currx+xdiff
+        testy=slope*(nextx-xdiff/2)+slope_y_correction
+        if round(testy) == curry then
+          currx=nextx
+          intx=currx-xdiff/2
+          inty=testy
+          if xdiff>0 then
+            reversed=true
+          end
+        else
+          curry+=ydiff
+          intx=(curry-ydiff/2-slope_y_correction)/slope
+          inty=curry-ydiff/2
+          if ydiff<0 then
+            reversed=true
           end
         end
       end
+
+      sprite_id=mget(currx,-curry)
+      if sprite_id > 0 then
+        if band(fget(sprite_id),1) == 0 then
+          found=true
+        end
+        add(draw_stack,{intx,inty,sprite_id,reversed})
+      end
     end
+
+    for stack_i=#draw_stack,1,-1 do
+      intx=draw_stack[stack_i][1]
+      inty=draw_stack[stack_i][2]
+      sprite_id=draw_stack[stack_i][3]
+      reversed=draw_stack[stack_i][4]
+
+      pixel_col=flr(((intx+inty)%1)*8)
+      distance=makevec2d(intx-player.coords.x,inty-player.coords.y):tomagnitude()
+      height=2*height_scale/distance/field_of_view
+      screeny=64-height*(1-height_ratio)
+      spritex=8*(sprite_id%16)
+      spritey=8*flr(sprite_id/16)
+
+      if not cached_sprites[sprite_id] then
+        -- spritex=8*(sprite_id%16)
+        -- spritey=8*flr(sprite_id/16)
+        cached_sprites[sprite_id]={}
+        for cx=0,7 do
+          cached_sprites[sprite_id][cx]={}
+          for cy=0,15 do
+            cached_sprites[sprite_id][cx][cy]=sget(spritex+cx,spritey+cy)
+          end
+        end
+      end
+
+      for pixel_row=0,15 do
+        if reversed then
+          pixel_color=cached_sprites[sprite_id][7-pixel_col][pixel_row]
+        else
+          pixel_color=cached_sprites[sprite_id][pixel_col][pixel_row]
+        end
+        if pixel_color > 0 then
+          rectfill(screenx,flr(screeny+pixel_row*height/16),screenx+draw_width-1,flr(screeny+(pixel_row+1)*height/16)-1,pixel_color)
+        end
+        --sspr(spritex+pixel_col,spritey+pixel_row,1,1,screenx,screeny+pixel_row*height/16,1,ceil(height/16))
+        --row_height=
+      end
+
+      --sspr(spritex+pixel_col,spritey,1,16,screenx,screeny,draw_width,height)
+
+      -- seenwalls[currx] = seenwalls[currx] or {}
+      -- if not seenwalls[currx][curry] then
+      --   seenwalls[currx][curry] = sprite_id
+      --   wall_pool.make(makewall(sprite_id,makevec2d(currx,curry)))
+      -- end
+    end
+
+    screenx+=draw_width
   end
-  for i=#nearby_walls,1,-1 do
-    wall_pool.make(nearby_walls[i])
-  end
+  -- spr(0,round(player.coords.x)*8,-round(player.coords.y)*8)
+  -- for x,arr in pairs(seenwalls) do
+  --   for y,sprite_id in pairs(arr) do
+  --     if sprite_id == 0 then
+  --       sprite_id=3
+  --     end
+  --     spr(sprite_id,x*8,-y*8)
+  --   end
+  -- end
 end
+
+-- function draw_walls()
+--   local pv=player.bearing:tovector()
+--   local next_col=makevec2d(flr(pv.y+0.5),-flr(pv.x+0.5))
+--   local next_row
+--   if abs(pv.x) > abs(pv.y) then
+--     next_row=makevec2d(towinf(pv.x),0)
+--   else
+--     next_row=makevec2d(0,towinf(pv.y))
+--   end
+
+--   wall_pool=make_pool()
+--   local nearby_walls={}
+--   local queue={{flr(player.coords.x+0.5)-next_row.x,flr(player.coords.y+0.5)-next_row.y}}
+--   local qi=0
+--   local seen_walls={}
+--   seen_walls[queue[1][1]]={}
+--   seen_walls[queue[1][1]][queue[1][2]]=true
+--   local current_spot
+--   local x,y,cx,cy
+--   local sprite_id
+--   local first=true
+--   while qi < #queue do
+--     qi+=1
+--     cx=queue[qi][1]
+--     cy=queue[qi][2]
+--     sprite_id=mget(cx,-cy)
+--     if not first and sprite_id > 0 then
+--       current_spot=makevec2d(cx,cy)
+--       add(nearby_walls,makewall(sprite_id,current_spot))
+--     else
+--       first=false
+--       for col=-2,2 do
+--         x=cx+next_row.x+col*next_col.x
+--         y=cy+next_row.y+col*next_col.y
+--         seen_walls[x]=seen_walls[x] or {}
+--         if not seen_walls[x][y] then
+--           seen_walls[x][y]=true
+--           if abs(x-player.coords.x)+abs(y-player.coords.y) < draw_distance then
+--             add(queue,{x,y})
+--           end
+--         end
+--       end
+--     end
+--   end
+--   for i=#nearby_walls,1,-1 do
+--     wall_pool.make(nearby_walls[i])
+--   end
+-- end
 
 mobile_pool = make_pool()
 wall_pool = make_pool()
@@ -523,17 +655,18 @@ function _draw()
   local fog_height=height_scale*2/draw_distance/field_of_view
   rectfill(0,64-fog_height*(1-height_ratio),127,64+fog_height*height_ratio,1)
   --draw_stars()
-  draw_walls()
-  wall_pool:sort_by(sort_by_distance)
+  --draw_walls()
+  raycast_walls()
+  --wall_pool:sort_by(sort_by_distance)
   mobile_pool:sort_by(sort_by_distance)
   all_pool=mobile_pool:zip_with(wall_pool)
-  all_pool=wall_pool:zip_with(mobile_pool)
-  all_pool:each(function(m)
-    m:draw()
-  end)
-  -- mobile_pool:each(function(m)
+  --all_pool=wall_pool:zip_with(mobile_pool)
+  -- all_pool:each(function(m)
   --   m:draw()
   -- end)
+  mobile_pool:each(function(m)
+    m:draw()
+  end)
   -- wall_pool:each(function(m)
   --   m:draw()
   -- end)
@@ -677,7 +810,7 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 __gff__
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0202020202020202020202020202020200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
