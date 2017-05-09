@@ -415,7 +415,7 @@ function raycast_walls()
     -- draw_width=screenx/127
     -- draw_width=remaining_time/flr(stat(1)*3)+1
   --for screenx=0,127,draw_width do
-    angle_offset=(screenx/127-.5)*field_of_view
+    angle_offset=((screenx+(draw_width-1)/2)/127-.5)*field_of_view
 
     pv=(player.bearing+angle_offset):tovector()
     xdiff=towinf(pv.x)
