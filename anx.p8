@@ -378,28 +378,6 @@ makemobile = (function()
   end
 end)()
 
-makewall = (function()
-  local function draw_wall(obj)
-    local wtopraw=player.coords-obj.coords
-    local wtop=makevec2d(mid(-1,1,round(wtopraw.x)),mid(-1,1,round(wtopraw.y))) --fix me!
-    if wtop.x != 0 and mget(obj.coords.x+wtop.x,-obj.coords.y) == 0 then
-      draw_sprite(obj.sprite_id,makevec2d(obj.coords.x+wtop.x*.5,obj.coords.y),makevec2d(wtop.x,0):tobearing(),false,true)
-    end
-    if wtop.y != 0 and mget(obj.coords.x,-obj.coords.y-wtop.y) == 0 then
-      draw_sprite(obj.sprite_id,makevec2d(obj.coords.x,obj.coords.y+wtop.y*.5),makevec2d(0,wtop.y):tobearing(),false,true)
-    end
-  end
-
-  return function(sprite_id,coords)
-    return {
-      sprite_id=sprite_id,
-      coords=coords,
-      draw=draw_wall
-    }
-  end
-end)()
-
-
 function raycast_walls()
   local pv
   local slope
@@ -530,55 +508,6 @@ function raycast_walls()
   --   end
   -- end
 end
-
--- function draw_walls()
---   local pv=player.bearing:tovector()
---   local next_col=makevec2d(flr(pv.y+0.5),-flr(pv.x+0.5))
---   local next_row
---   if abs(pv.x) > abs(pv.y) then
---     next_row=makevec2d(towinf(pv.x),0)
---   else
---     next_row=makevec2d(0,towinf(pv.y))
---   end
-
---   wall_pool=make_pool()
---   local nearby_walls={}
---   local queue={{flr(player.coords.x+0.5)-next_row.x,flr(player.coords.y+0.5)-next_row.y}}
---   local qi=0
---   local seen_walls={}
---   seen_walls[queue[1][1]]={}
---   seen_walls[queue[1][1]][queue[1][2]]=true
---   local current_spot
---   local x,y,cx,cy
---   local sprite_id
---   local first=true
---   while qi < #queue do
---     qi+=1
---     cx=queue[qi][1]
---     cy=queue[qi][2]
---     sprite_id=mget(cx,-cy)
---     if not first and sprite_id > 0 then
---       current_spot=makevec2d(cx,cy)
---       add(nearby_walls,makewall(sprite_id,current_spot))
---     else
---       first=false
---       for col=-2,2 do
---         x=cx+next_row.x+col*next_col.x
---         y=cy+next_row.y+col*next_col.y
---         seen_walls[x]=seen_walls[x] or {}
---         if not seen_walls[x][y] then
---           seen_walls[x][y]=true
---           if abs(x-player.coords.x)+abs(y-player.coords.y) < draw_distance then
---             add(queue,{x,y})
---           end
---         end
---       end
---     end
---   end
---   for i=#nearby_walls,1,-1 do
---     wall_pool.make(nearby_walls[i])
---   end
--- end
 
 mobile_pool = make_pool()
 wall_pool = make_pool()
