@@ -156,6 +156,10 @@ makevec2d = (function()
     local dir_mag=direction:tomagnitude()
     return ((direction*t)/(dir_mag*dir_mag))*direction
   end
+  local function cross_with(t,vector)
+    -- signed magnitude of 3d cross product
+    return t.x*vector.y-t.y*vector.x
+  end
   return function(x, y)
    local t = {
     x=x,
@@ -164,7 +168,8 @@ makevec2d = (function()
     tobearing=bearing,
     tomagnitude=magnitude,
     diamond_distance=diamond_distance,
-    project_onto=project_onto
+    project_onto=project_onto,
+    cross_with=cross_with
    }
    setmetatable(t, mt)
    return t
@@ -378,6 +383,69 @@ makemobile = (function()
   end
 end)()
 
+function draw_mob_column(dir_vector,screenx,width,mob)
+  if dir_vector*(mob.coords-player.coords) < 0 then
+    return
+  end
+
+  local width_vector=(mob.bearing-.25):tovector()
+
+  -- p + t r = q + u s -- p,t,r from player, q,u,s from mob
+  -- u = (q − p) × r / (r × s)
+
+  local mob_origin=mob.coords-.5*width_vector
+
+  u=(mob_origin-player.coords):cross_with(dir_vector)/dir_vector:cross_with(width_vector)
+
+  local spritex,spritey,pixel_col
+  if u >= 0 and u < 1 then --intersection!
+    spritex=8*(mob.sprite_id%16)
+    spritey=8*flr(mob.sprite_id/16)
+    pixel_col=flr(u*8)
+
+    local distance=(mob_origin+u*width_vector-player.coords):tomagnitude()
+    local height=2*height_scale/distance/field_of_view
+    local vy=64-height*(1-height_ratio)
+
+    for pixel_row=0,15 do
+      pxcolor=sget(spritex+pixel_col,spritey+pixel_row)
+      if pxcolor>0 then
+        rectfill(
+          screenx,
+          vy+pixel_row*height/16,
+          screenx+width-1,
+          vy+(pixel_row+1)*height/16-1,
+          pxcolor
+        )
+      end
+    end
+    --sspr(spritex+pixel_col,spritey,1,16,screenx,vy,width,height) --screeny+pixel_row*height/16
+  end
+
+  -- local left_coords=coords-width_vector/2
+  -- local left_rel_bearing=(left_coords-player.coords):tobearing()-player.bearing
+  -- local vx=flr(((left_rel_bearing+.5).val-.5)/field_of_view*2*64+64)
+  -- if vx >= 128 then
+  --   return
+  -- end
+
+  -- local right_coords=left_coords+width_vector
+  -- local right_rel_bearing=(right_coords-player.coords):tobearing()-player.bearing
+  -- local width=flr(((right_rel_bearing+.5).val-.5)/field_of_view*2*64+64)-vx
+  -- if vx+width < 0 then
+  --   return
+  -- end
+
+  -- --local scale=width/width_vector:project_onto((player.bearing+0.25):tovector()):tomagnitude()
+  -- local distance=(coords-player.coords):tomagnitude()
+  -- if distance < .3 or distance > draw_distance then
+  --   return
+  -- end
+  -- local scale=height_scale/distance/field_of_view
+  -- local depthoffset=sin((rel_bearing_to_p).val)/8*scale
+  -- local depth=abs(depthoffset)
+end
+
 function raycast_walls()
   local pv
   local slope
@@ -388,8 +456,14 @@ function raycast_walls()
   screenx=0
   local alotted_time=.9-stat(1)
   local start_time=stat(1)
+  local skipped_columns=0
   while screenx<=127 do
-    draw_width=mid(1,5,flr((stat(1)-(screenx/127)*alotted_time+start_time)*20))
+    if changed_position then
+      draw_width=mid(1,5,flr((stat(1)-(screenx/127)*alotted_time+start_time)*20))
+    else
+      draw_width=1
+    end
+    skipped_columns+=draw_width-1
     -- draw_width=screenx/127
     -- draw_width=remaining_time/flr(stat(1)*3)+1
   --for screenx=0,127,draw_width do
@@ -496,8 +570,15 @@ function raycast_walls()
       -- end
     end
 
+    draw_mob_column(pv,screenx,draw_width,mob)
+    if draw_width>1 then
+      line(screenx+1,127,screenx+draw_width-1,127,8)
+    end
+
     screenx+=draw_width
   end
+  color(12)
+  print(1-skipped_columns/128)
   -- spr(0,round(player.coords.x)*8,-round(player.coords.y)*8)
   -- for x,arr in pairs(seenwalls) do
   --   for y,sprite_id in pairs(arr) do
@@ -515,17 +596,21 @@ player =makemobile(false,makevec2d(3.5,-3),makeangle(-1/8))
 -- for i=0,2 do
 --   mobile_pool.make(makemobile(flr(rnd(2)),makevec2d(rnd(8),-rnd(10)),makeangle(rnd())))
 -- end
-mobile_pool.make(makemobile(0,makevec2d(7,-2),makeangle(-1/8)))
+--mobile_pool.make()
+mob=makemobile(0,makevec2d(7,-2),makeangle(-1/8))
 --mobile_pool.make(makemobile(1,makevec2d(4,-4),makeangle(rnd())))
 
 function _update()
   local offset = makevec2d(0,0)
   local facing = player.bearing:tovector()
   local right = makevec2d(facing.y,-facing.x)
+  changed_position=false
   if btn(0) then
+    changed_position=true
     player.bearing-=0.01
   end
   if btn(1) then
+    changed_position=true
     player.bearing+=0.01
   end
   if btn(2) then
@@ -557,7 +642,11 @@ function _update()
       end
     end
   end
-  player.coords=new_coords
+  if player.coords.x != new_coords.x or player.coords.y != new_coords.y then
+    changed_position=true
+    player.coords=new_coords
+  end
+
   -- mobile_pool.each(function(m)
   --   m.bearing+=0.01
   -- end)
