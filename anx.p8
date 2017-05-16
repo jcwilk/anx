@@ -390,7 +390,7 @@ function raycast_walls()
       pixel_col=draw_stack[stack_i][4]
       color_map=draw_stack[stack_i][5] or {}
 
-      distance=makevec2d(intx-player.coords.x,inty-player.coords.y):tomagnitude()
+      distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
       height=2*height_scale/distance/field_of_view
       screeny=64-height*(1-height_ratio)
 
@@ -406,13 +406,16 @@ function raycast_walls()
         end
       end
 
+      pixel_height=height/16
+      screenxright=screenx+draw_width-1
+
       for pixel_row=0,15 do
         pixel_color=cached_sprites[sprite_id][pixel_col][pixel_row]
-        if color_map[pixel_color] then
+        if pixel_color > 0 and color_map[pixel_color] then
           pixel_color=color_map[pixel_color]
         end
         if pixel_color > 0 then
-          rectfill(screenx,flr(screeny+pixel_row*height/16),screenx+draw_width-1,flr(screeny+(pixel_row+1)*height/16)-1,pixel_color)
+          rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,pixel_color)
         end
       end
     end
