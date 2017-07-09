@@ -4,72 +4,6 @@ draw_distance=12
 height_scale=20 -- multiplier for something at distance of one after dividing by field of view
 height_ratio=0.6
 
-makewall = (function()
-  return function(sprite_id,coords,bearing)
-    return {
-      sprite_id=sprite_id,
-      coords=coords
-    }
-  end
-end)()
-
-makemobile = (function()
-  local mob_id_counter=0
-
-  local function turnto(m)
-    m.bearing+=mid(-.005,.005,((m.coords-player.coords):tobearing()-m.bearing).val-.5)
-  end
-
-  return function(sprite_id,coords,bearing)
-    mob_id_counter+=1
-    return {
-      id=mob_id_counter,
-      sprite_id=sprite_id,
-      coords=coords,
-      bearing=bearing,
-      turn_towards_player=turnto
-    }
-  end
-end)()
-
-function get_mob_int(dir_vector,screenx,width,mob)
-
-  --so it doesn't get too squashed
-  -- local bearing_to_mob=vec_to_mob:tobearing()
-  -- local angle_diff=((mob.bearing-bearing_to_mob).val%.5)-.25 --.25,.75
-  -- local mob_bearing=mob.bearing-(angle_diff/10-towinf(angle_diff)*.25/10)
-  mob_bearing=mob.bearing
-
-
-
-  local width_vector=(mob_bearing-.25):tovector()
-  --local side_vector=makevec2d(-width_vector.y,width_vector.x)
-  local side_length=(width_vector*dir_vector)/8
-
-  --local mob_origin=mob.coords-.5*width_vector
-  local mob_origin=makevec2d(mob.coords.x-.5*width_vector.x,mob.coords.y-.5*width_vector.y)
-
-  -- calculate where along the width the intersection into the face is
-  -- p + t r = q + u s -- p,t,r from player along ray, q,u,s from mob along face
-  -- u = (q − p) × r / (r × s)
-  local dir_x_width=dir_vector.x*width_vector.y - dir_vector.y*width_vector.x --dir_vector:cross_with(width_vector)
-  local u=(mob_origin-player.coords):cross_with(dir_vector)/dir_x_width
-
-  if u >= 0 and u < 1 then --intersection!
-    local pixel_col=flr(u*8)
-    --local intersect=mob_origin+u*width_vector
-    local color_map={}
-    if dir_x_width < 0 then
-      color_map[14]=0
-    else
-      color_map[14]=15
-    end
-    --return {intersect.x,intersect.y,mob.sprite_id,pixel_col,color_map}
-
-    return {mob.coords.x,mob.coords.y,mob.sprite_id,pixel_col,color_map,side_length*2}
-  end
-end
-
 start_time=0
 max_width=0
 function raycast_walls()
@@ -77,7 +11,6 @@ function raycast_walls()
   local slope
   local seenwalls={}
   local currx,curry,nextx,found,xdiff,ydiff,sprite_id,testy,testx,intx,inty
-  local cached_sprites={}
   wall_pool=make_pool()
   screenx=0
   buffer_percent=.1
@@ -94,6 +27,7 @@ function raycast_walls()
 
   local skipped_columns=0
   local found_mobs
+  local mob_draw, draw_stack
   max_width=0
   while screenx<=127 do
     behind_time=stat(1)-(start_time+screenx/127*alotted_time-buffer_time)
@@ -158,16 +92,16 @@ function raycast_walls()
         if reversed then
           pixel_col=7-pixel_col
         end
-        add(draw_stack,{intx,inty,sprite_id,pixel_col})
+        add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col))
       end
       if not debug then
         if (not found) and mob_pos_map[currx] and mob_pos_map[currx][curry] then
           for mobi in all(mob_pos_map[currx][curry]) do
             if not found_mobs[mobi.id] then
-              mob_int=get_mob_int(pv,screenx,draw_width,mobi)
-              if mob_int then
+              mob_draw=mobi:deferred_draw(pv,screenx,draw_width)
+              if mob_draw then
                 found_mobs[mobi.id]=true
-                add(draw_stack,mob_int)
+                add(draw_stack,mob_draw)
               end
             end
           end
@@ -176,54 +110,7 @@ function raycast_walls()
     end
 
     for stack_i=#draw_stack,1,-1 do
-      intx=draw_stack[stack_i][1]
-      inty=draw_stack[stack_i][2]
-      sprite_id=draw_stack[stack_i][3]
-      pixel_col=draw_stack[stack_i][4]
-      color_map=draw_stack[stack_i][5] or {}
-      side_offset=draw_stack[stack_i][6] or 0
-
-      distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
-      height=2*height_scale/distance/field_of_view
-      screeny=64-height*(1-height_ratio)
-
-      if not cached_sprites[sprite_id] then
-        spritex=8*(sprite_id%16)
-        spritey=8*flr(sprite_id/16)
-        cached_sprites[sprite_id]={}
-        for cx=0,7 do
-          cached_sprites[sprite_id][cx]={}
-          for cy=0,15 do
-            cached_sprites[sprite_id][cx][cy]=sget(spritex+cx,spritey+cy)
-          end
-        end
-      end
-
-      pixel_height=height/16
-      screenxright=screenx+draw_width-1
-
-      pixel_column=cached_sprites[sprite_id][pixel_col]
-      for pixel_row=0,15 do
-        drawn=false
-        pixel_color=pixel_column[pixel_row]
-        if pixel_color > 0 then
-          pixel_color=color_map[pixel_color] or pixel_color
-
-          if pixel_color > 0 then
-            drawn=true
-            rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,pixel_color)
-          end
-        end
-        offset_check=towinf(side_offset)
-        while not drawn and offset_check != 0 do
-          check_col=cached_sprites[sprite_id][pixel_col+offset_check]
-          if check_col and check_col[pixel_row] > 0 then
-            drawn=true
-            rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,1)
-          end
-          offset_check-=tounit(offset_check)
-        end
-      end
+      draw_stack[stack_i]()
     end
 
     if draw_width>1 then
@@ -374,6 +261,6 @@ function _draw()
   cursor(0,0)
   print(start_time)
   print(stat(1))
-  print("x"..player.coords.x.."y"..player.coords.y)
+  print("x"..player.coords.x.." y"..player.coords.y)
 end
 -- END LIB

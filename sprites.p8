@@ -228,6 +228,143 @@ end)()
 -- end ext
 
 -- START LIB
+
+cached_sprites={}
+
+function cache_sprite(sprite_id)
+  if not cached_sprites[sprite_id] then
+    local spritex=8*(sprite_id%16)
+    local spritey=8*flr(sprite_id/16)
+    cached_sprites[sprite_id]={}
+    for cx=0,7 do
+      cached_sprites[sprite_id][cx]={}
+      for cy=0,15 do
+        cached_sprites[sprite_id][cx][cy]=sget(spritex+cx,spritey+cy)
+      end
+    end
+  end
+end
+
+function deferred_wall_draw(intx,inty,sprite_id,pixel_col)
+  local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
+  local height=2*height_scale/distance/field_of_view
+  local screeny=64-height*(1-height_ratio)
+
+  cache_sprite(sprite_id)
+
+  local pixel_height=height/16
+  local screenxright=screenx+draw_width-1
+
+  local pixel_column=cached_sprites[sprite_id][pixel_col]
+  return function()
+    local pixel_color, offset_check, check_col
+
+    for pixel_row=0,15 do
+      pixel_color=pixel_column[pixel_row]
+      if pixel_color > 0 then
+        rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,pixel_color)
+      end
+    end
+  end
+end
+
+function deferred_mob_draw(mob,dir_vector,screenx,width)
+
+  --so it doesn't get too squashed
+  -- local bearing_to_mob=vec_to_mob:tobearing()
+  -- local angle_diff=((mob.bearing-bearing_to_mob).val%.5)-.25 --.25,.75
+  -- local mob_bearing=mob.bearing-(angle_diff/10-towinf(angle_diff)*.25/10)
+  local mob_bearing=mob.bearing
+
+
+
+  local width_vector=(mob_bearing-.25):tovector()
+  --local side_vector=makevec2d(-width_vector.y,width_vector.x)
+  local side_length=(width_vector*dir_vector)/8
+
+  --local mob_origin=mob.coords-.5*width_vector
+  local mob_origin=makevec2d(mob.coords.x-.5*width_vector.x,mob.coords.y-.5*width_vector.y)
+
+  -- calculate where along the width the intersection into the face is
+  -- p + t r = q + u s -- p,t,r from player along ray, q,u,s from mob along face
+  -- u = (q − p) × r / (r × s)
+  local dir_x_width=dir_vector.x*width_vector.y - dir_vector.y*width_vector.x --dir_vector:cross_with(width_vector)
+  local u=(mob_origin-player.coords):cross_with(dir_vector)/dir_x_width
+
+  if u >= 0 and u < 1 then --intersection!
+    local pixel_col=flr(u*8)
+    --local intersect=mob_origin+u*width_vector
+    local color_map={}
+    if dir_x_width < 0 then
+      color_map[14]=0
+    else
+      color_map[14]=15
+    end
+
+    local intx=mob.coords.x
+    local inty=mob.coords.y
+    local sprite_id=mob.sprite_id
+    local side_offset=side_length
+
+    local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
+    local height=2*height_scale/distance/field_of_view
+    local screeny=64-height*(1-height_ratio)
+
+    cache_sprite(sprite_id)
+
+    local pixel_height=height/16
+    local screenxright=screenx+draw_width-1
+
+    local pixel_column=cached_sprites[sprite_id][pixel_col]
+    return function()
+      local drawn=false
+      local pixel_color, offset_check, check_col
+
+      for pixel_row=0,15 do
+        drawn=false
+        pixel_color=pixel_column[pixel_row]
+        if pixel_color > 0 then
+          pixel_color=color_map[pixel_color] or pixel_color
+
+          if pixel_color > 0 then
+            drawn=true
+            rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,pixel_color)
+          end
+        end
+        offset_check=towinf(side_offset)
+        while not drawn and offset_check != 0 do
+          check_col=cached_sprites[sprite_id][pixel_col+offset_check]
+          if check_col and check_col[pixel_row] > 0 then
+            drawn=true
+            rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,1)
+          end
+          offset_check-=tounit(offset_check)
+        end
+      end
+    end
+  end
+end
+
+makemobile = (function()
+  local mob_id_counter=0
+
+  local function turnto(m)
+    m.bearing+=mid(-.005,.005,((m.coords-player.coords):tobearing()-m.bearing).val-.5)
+  end
+
+  return function(sprite_id,coords,bearing)
+    mob_id_counter+=1
+    return {
+      id=mob_id_counter,
+      sprite_id=sprite_id,
+      coords=coords,
+      bearing=bearing,
+      turn_towards_player=turnto,
+      deferred_draw=deferred_mob_draw
+    }
+  end
+end)()
+
 -- END LIB
 
 __gfx__
