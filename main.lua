@@ -215,7 +215,7 @@ function _update()
   end
 
   mobile_pool:each(function(m)
-    m.bearing+=.01
+    --m.bearing+=.01
     --m:turn_towards_player()
   end)
 end

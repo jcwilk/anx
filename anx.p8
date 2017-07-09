@@ -161,7 +161,7 @@ makevec2d = (function()
   return abs(t.x)+abs(t.y)
  end
  local function normalize(t)
-  return t/t:magnitude()
+  return t/t:tomagnitude()
  end
  local function project_onto(t,direction)
   local dir_mag=direction:tomagnitude()
@@ -180,7 +180,8 @@ makevec2d = (function()
   tomagnitude=magnitude,
   diamond_distance=diamond_distance,
   project_onto=project_onto,
-  cross_with=cross_with
+  cross_with=cross_with,
+  normalize=normalize
  }
  setmetatable(t, mt)
  return t
@@ -288,45 +289,31 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
  if cached_mob then
   return cached_mob
  end
+ local color_translate_map = {
+  0,1,2,
+  2,1,5,6,
+  2,4,9,3,
+  1,2,2,4
+ }
 
  local mob_bearing=mob.bearing
 
+ local vec_to_mob=mob.coords-player.coords
+
  local width_vector=(mob_bearing-.25):tovector()
  --local side_vector=makevec2d(-width_vector.y,width_vector.x)
- local side_length=(width_vector*dir_vector)/8
+ local side_length=(width_vector*vec_to_mob:normalize())/8
 
- local face_length=mob_bearing:tovector()*dir_vector
+ local face_length=mob_bearing:tovector()*vec_to_mob:normalize()
 
- local distance=sqrt((mob.coords.x-player.coords.x)^2+(mob.coords.y-player.coords.y)^2)
+ local distance=vec_to_mob:tomagnitude()
  local height=2*height_scale/distance/field_of_view
  local screen_width=abs(face_length)*height/2
+ local screen_side=abs(side_length)*height/2
 
- local vec_to_mob=mob.coords-player.coords
  local screenx_mob=angle_to_screenx(vec_to_mob:tobearing())
  local left_screenx_mob=screenx_mob-screen_width/2
  local screeny=flr(64-height*(1-height_ratio))
-
- local rows={}
- local row,pixel,pixel_color
- for row_i=0,15 do
-  row={
-   yo=flr(screeny+row_i/16*height),
-   yf=flr(screeny+(row_i+1)/16*height)-1,
-   pixels={}
-  }
-  for col_i=0,7 do
-   pixel_color=sget(col_i,row_i)
-   if pixel_color == 14 then
-    if face_length > 0 then
-     pixel_color=7
-    else
-     pixel_color=15
-    end
-   end
-   add(row.pixels,pixel_color)
-  end
-  add(rows,row)
- end
 
  local columns={}
  local column
@@ -338,9 +325,51 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   add(columns,column)
  end
 
+ local rows={}
+ local row,pixel,pixel_color
+ local sides, side
+ for row_i=0,15 do
+  row={
+   yo=flr(screeny+row_i/16*height),
+   yf=flr(screeny+(row_i+1)/16*height)-1,
+   pixels={}
+  }
+  sides={}
+  for col_i=0,7 do
+   pixel_color=sget(col_i,row_i)
+   if pixel_color == 14 then
+    if face_length > 0 then
+     pixel_color=7
+    else
+     pixel_color=15
+    end
+   end
+   if pixel_color > 0 then
+    if side_length*face_length < 0 then
+     side={
+      xo=columns[col_i+1].xo-screen_side,
+      xf=columns[col_i+1].xo-1,
+      color=color_translate_map[pixel_color]
+     }
+    else
+     side={
+      xo=columns[col_i+1].xf+1,
+      xf=columns[col_i+1].xf+screen_side,
+      color=color_translate_map[pixel_color]
+     }
+    end
+    add(sides,side)
+   end
+   add(row.pixels,pixel_color)
+  end
+  row.sides=sides
+  add(rows,row)
+ end
+
  local mob_data={
   rows=rows,
-  columns=columns
+  columns=columns,
+  side_length=tounit(side_length*face_length)*screen_side
  }
 
  cached_mobs[mob.id]=mob_data
@@ -358,6 +387,7 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
   local found=false
   local column, pixel
   local col_i=0
+  local side_only=false
   while not found and col_i < #mob_data.columns do
    col_i+=1
    column=mob_data.columns[col_i]
@@ -365,17 +395,40 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
     if column.xf >= screenx then
      found=true
     end
+   elseif column.xo+mob_data.side_length <= screenx then
+    side_only=true
+    found=true
    else
     return
    end
   end
 
+  if not found and mob_data.columns[col_i].xf+mob_data.side_length >= screenx then
+   side_only=true
+  end
+
   local screenxright=screenx+draw_width-1
+  local side_i,side
 
   for row in all(mob_data.rows) do
    pixel=row.pixels[col_i]
-   if pixel != 0 then
+   if not side_only and pixel > 0 then
     rectfill(screenx,row.yo,screenxright,row.yf,pixel)
+   else
+    found=false
+    side_i=0
+    while not found and side_i < #row.sides do
+     side_i+=1
+     side=row.sides[side_i]
+     if side.xo <= screenx then
+      if side.xf >= screenx then
+       found=true
+       rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
+      end
+     else
+      found=true
+     end
+    end
    end
   end
  end
@@ -620,7 +673,7 @@ function _update()
  end
 
  mobile_pool:each(function(m)
-  m.bearing+=.01
+  --m.bearing+=.01
   --m:turn_towards_player()
  end)
 end

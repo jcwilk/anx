@@ -155,7 +155,7 @@ makevec2d = (function()
     return abs(t.x)+abs(t.y)
   end
   local function normalize(t)
-    return t/t:magnitude()
+    return t/t:tomagnitude()
   end
   local function project_onto(t,direction)
     local dir_mag=direction:tomagnitude()
@@ -174,7 +174,8 @@ makevec2d = (function()
     tomagnitude=magnitude,
     diamond_distance=diamond_distance,
     project_onto=project_onto,
-    cross_with=cross_with
+    cross_with=cross_with,
+    normalize=normalize
    }
    setmetatable(t, mt)
    return t
