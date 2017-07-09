@@ -219,4 +219,14 @@ makeangle = (function()
     return t
   end
 end)()
+
+function angle_to_screenx(angle)
+  return (((angle-player.bearing)+.5).val-.5)/field_of_view*64*2+64
+end
+
+function screenx_to_angle(screenx)
+  local angle_offset=(screenx/127-.5)*field_of_view
+
+  return player.bearing+angle_offset
+end
 -- END LIB

@@ -28,7 +28,9 @@ function raycast_walls()
   local skipped_columns=0
   local found_mobs
   local mob_draw, draw_stack
+  local draw_width
   max_width=0
+  clear_draw_cache()
   while screenx<=127 do
     behind_time=stat(1)-(start_time+screenx/127*alotted_time-buffer_time)
     draw_width=128*behind_time/alotted_time
@@ -36,9 +38,8 @@ function raycast_walls()
     max_width=max(max_width,draw_width)
     skipped_columns+=draw_width-1
 
-    angle_offset=((screenx+(draw_width-1)/2)/127-.5)*field_of_view
+    pv=screenx_to_angle(screenx+(draw_width-1)/2):tovector()
 
-    pv=(player.bearing+angle_offset):tovector()
     xdiff=towinf(pv.x)
     ydiff=towinf(pv.y)
     if abs(pv.x) < .001 then
@@ -92,7 +93,7 @@ function raycast_walls()
         if reversed then
           pixel_col=7-pixel_col
         end
-        add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col))
+        add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width))
       end
       if not debug then
         if (not found) and mob_pos_map[currx] and mob_pos_map[currx][curry] then
