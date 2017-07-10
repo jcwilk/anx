@@ -299,14 +299,15 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local mob_bearing=mob.bearing
 
   local vec_to_mob=mob.coords-player.coords
+  local distance=vec_to_mob:tomagnitude()
+  local normal_vec_to_mob=vec_to_mob/distance
 
   local width_vector=(mob_bearing-.25):tovector()
   --local side_vector=makevec2d(-width_vector.y,width_vector.x)
-  local side_length=(width_vector*vec_to_mob:normalize())/8
+  local side_length=(width_vector*normal_vec_to_mob)/8
 
-  local face_length=mob_bearing:tovector()*vec_to_mob:normalize()
+  local face_length=mob_bearing:tovector()*normal_vec_to_mob
 
-  local distance=vec_to_mob:tomagnitude()
   local height=2*height_scale/distance/field_of_view
   local screen_width=abs(face_length)*height/2
   local screen_side=abs(side_length)*height/2
@@ -328,6 +329,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local rows={}
   local row,pixel,pixel_color
   local sides, side
+  local side_to_left=side_length*face_length<0
+
   for row_i=0,15 do
     row={
       yo=flr(screeny+row_i/16*height),
@@ -345,7 +348,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
         end
       end
       if pixel_color > 0 then
-        if side_length*face_length < 0 then
+        if side_to_left then
           side={
             xo=columns[col_i+1].xo-screen_side,
             xf=columns[col_i+1].xo-1,
@@ -379,8 +382,6 @@ end
 
 function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
   local mob_data=cache_mob(mob,dir_vector,screenx,draw_width)
-  --screenx=flr(screenx)
-  printh(screenx)
 
   return function()
     local pixel_col
@@ -403,7 +404,7 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
       end
     end
 
-    if not found and mob_data.columns[col_i].xf+mob_data.side_length >= screenx then
+    if not found and #mob_data.columns>0 and mob_data.columns[#mob_data.columns].xf+mob_data.side_length >= screenx then
       side_only=true
     end
 
