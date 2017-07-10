@@ -416,17 +416,29 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
         rectfill(screenx,row.yo,screenxright,row.yf,pixel)
       else
         found=false
-        side_i=0
-        while not found and side_i < #row.sides do
-          side_i+=1
-          side=row.sides[side_i]
-          if side.xo <= screenx then
-            if side.xf >= screenx then
+        if mob_data.side_length <= 0 then
+          side_i=0
+          while not found and side_i < #row.sides do
+            side_i+=1
+            side=row.sides[side_i]
+            if side.xo <= screenx and side.xf >= screenx then
               found=true
-              rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
+              rectfill(screenx,row.yo,screenxright,row.yf,side.color)
+            elseif screenx < side.xo then
+              found=true
             end
-          else
-            found=true
+          end
+        else
+          side_i=#row.sides
+          while not found and side_i > 0 do
+            side=row.sides[side_i]
+            if side.xo <= screenx and side.xf >= screenx then
+              found=true
+              rectfill(screenx,row.yo,screenxright,row.yf,side.color)
+            elseif screenx > side.xf then
+              found=true
+            end
+            side_i-=1
           end
         end
       end

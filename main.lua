@@ -34,7 +34,7 @@ function raycast_walls()
   while screenx<=127 do
     behind_time=stat(1)-(start_time+screenx/127*alotted_time-buffer_time)
     draw_width=128*behind_time/alotted_time
-    draw_width=flr(mid(1,10,draw_width))
+    draw_width=flr(mid(1,8,draw_width))
     max_width=max(max_width,draw_width)
     skipped_columns+=draw_width-1
 
