@@ -95,15 +95,13 @@ function raycast_walls()
         end
         add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width))
       end
-      if not debug then
-        if (not found) and mob_pos_map[currx] and mob_pos_map[currx][curry] then
-          for mobi in all(mob_pos_map[currx][curry]) do
-            if not found_mobs[mobi.id] then
-              mob_draw=mobi:deferred_draw(pv,screenx,draw_width)
-              if mob_draw then
-                found_mobs[mobi.id]=true
-                add(draw_stack,mob_draw)
-              end
+      if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
+        for mobi in all(mob_pos_map[currx][curry]) do
+          if not found_mobs[mobi.id] then
+            mob_draw=mobi:deferred_draw(pv,screenx,draw_width)
+            if mob_draw then
+              found_mobs[mobi.id]=true
+              add(draw_stack,mob_draw)
             end
           end
         end
@@ -114,22 +112,36 @@ function raycast_walls()
       draw_stack[stack_i]()
     end
 
-    if draw_width>1 then
+    if debug and draw_width>1 then
       line(screenx+1,127,screenx+draw_width-1,127,8)
     end
 
     screenx+=draw_width
   end
-  color(12)
-  print(1-skipped_columns/128)
-  print(max_width)
+  if debug then
+    color(12)
+    print(1-skipped_columns/128)
+    print(max_width)
+  end
 end
 
 mobile_pool = make_pool()
 wall_pool = make_pool()
 player =makemobile(false,makevec2d(8.3,-2.5),makeangle(-1/4))
-for i=0,5 do
-  mobile_pool.make(makemobile(i%2,makevec2d(i+1,-(i%3)-1),makeangle(rnd())))
+mob_locations = {
+  {2.8,-1.3},
+  {2.1,-5.3},
+  {12.2,-7.5},
+  {14.2,-7.8},
+  {15.1,-6.6},
+  {18,1},
+  {19.5,-1},
+  {20,-2},
+  {20,-3},
+  {13,-13}
+}
+for mob_location in all(mob_locations) do
+  mobile_pool.make(makemobile(flr(rnd(2)),makevec2d(mob_location[1],mob_location[2]),makeangle(rnd())))
 end
 --mobile_pool.make()
 --mob=makemobile(0,makevec2d(7,-2),makeangle(-1/8))
@@ -142,6 +154,48 @@ menuitem(1, "debug", function()
     debug = true
   end
 end)
+
+current_anxiety=0
+function tick_anxiety()
+  if current_anxiety >= 0 then
+    current_anxiety-=.05+.005*current_anxiety
+    if current_anxiety < 0 then current_anxiety=0 end
+  end
+end
+
+player_bearing_v=0
+function tick_bearing_v()
+  if abs(player_bearing_v) > .0005 then
+    player_bearing_v-= tounit(player_bearing_v)*.0005
+    player.bearing+=player_bearing_v
+  end
+end
+
+walking_step=0
+function tick_walking()
+  walking_step+=.05
+  if walking_step >= 1 then walking_step=0 end
+end
+
+function recalc_settings()
+  -- https://www.desmos.com/calculator/pw8n3n8rwf
+  local anxiety_factor = -1/(-.4*current_anxiety-2)+.5
+  field_of_view = 1/8*anxiety_factor
+  height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
+end
+
+function nudge_player()
+  if rnd()>.5 then
+    player_bearing_v+=.005
+  else
+    player_bearing_v-=.005
+  end
+end
+
+function add_anxiety()
+  current_anxiety+=3
+  nudge_player()
+end
 
 function _update()
   local offset = makevec2d(0,0)
@@ -158,9 +212,11 @@ function _update()
   end
   if btn(2) then
     offset+=facing
+    tick_walking()
   end
   if btn(3) then
     offset-=facing
+    tick_walking()
   end
   if btn(4) then
     offset-=right
@@ -214,9 +270,24 @@ function _update()
     player.coords=new_coords
   end
 
+  tick_anxiety()
+  tick_bearing_v()
+  recalc_settings()
+
   mobile_pool:each(function(m)
     --m.bearing+=.01
     --m:turn_towards_player()
+    local m_to_p=m.coords-player.coords
+    local distance=m_to_p:tomagnitude()
+    if distance < 4 then
+      if abs(m:turn_towards_player()) < .1 then
+        if distance > 2 then
+          m.coords-= m_to_p/distance*.04
+        else
+          m:talk()
+        end
+      end
+    end
   end)
 end
 
@@ -258,10 +329,12 @@ function _draw()
   end)
 
   raycast_walls()
-  color(12)
-  cursor(0,0)
-  print(start_time)
-  print(stat(1))
-  print("x"..player.coords.x.." y"..player.coords.y)
+  if debug then
+    color(12)
+    cursor(0,0)
+    print(start_time)
+    print(stat(1))
+    print("x"..player.coords.x.." y"..player.coords.y)
+  end
 end
 -- END LIB

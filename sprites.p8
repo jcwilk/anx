@@ -303,16 +303,21 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local normal_vec_to_mob=vec_to_mob/distance
 
   local width_vector=(mob_bearing-.25):tovector()
-  --local side_vector=makevec2d(-width_vector.y,width_vector.x)
   local side_length=(width_vector*normal_vec_to_mob)/8
-
   local face_length=mob_bearing:tovector()*normal_vec_to_mob
+
+  local side_to_left=side_length*face_length<0
 
   local height=2*height_scale/distance/field_of_view
   local screen_width=abs(face_length)*height/2
   local screen_side=abs(side_length)*height/2
 
   local screenx_mob=angle_to_screenx(vec_to_mob:tobearing())
+  if side_to_left then
+    screenx_mob+=screen_side/2
+  else
+    screenx_mob-=screen_side/2
+  end
   local left_screenx_mob=screenx_mob-screen_width/2
   local screeny=flr(64-height*(1-height_ratio))
 
@@ -329,7 +334,9 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local rows={}
   local row,pixel,pixel_color
   local sides, side
-  local side_to_left=side_length*face_length<0
+
+  local spritex=8*(mob.sprite_id%16)
+  local spritey=8*(mob.sprite_id/16)
 
   for row_i=0,15 do
     row={
@@ -339,9 +346,9 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
     }
     sides={}
     for col_i=0,7 do
-      pixel_color=sget(col_i,row_i)
+      pixel_color=sget(col_i+spritex,row_i+spritey)
       if pixel_color == 14 then
-        if face_length > 0 then
+        if face_length <= 0 then
           pixel_color=7
         else
           pixel_color=15
@@ -451,7 +458,19 @@ makemobile = (function()
   local mob_id_counter=0
 
   local function turnto(m)
-    m.bearing+=mid(-.005,.005,((m.coords-player.coords):tobearing()-m.bearing).val-.5)
+    local bearing_diff=((m.coords-player.coords):tobearing()-m.bearing).val-.5
+    m.bearing+=mid(-.01,.01,bearing_diff)
+    return bearing_diff
+  end
+
+  local function talk(m)
+    if m.talk_delay <= 0 then
+      sfx(flr(rnd(4)))
+      m.talk_delay=30+rnd(10)
+      add_anxiety()
+    else
+      m.talk_delay-=1
+    end
   end
 
   return function(sprite_id,coords,bearing)
@@ -462,7 +481,9 @@ makemobile = (function()
       coords=coords,
       bearing=bearing,
       turn_towards_player=turnto,
-      deferred_draw=deferred_mob_draw
+      deferred_draw=deferred_mob_draw,
+      talk_delay=0,
+      talk=talk
     }
   end
 end)()
