@@ -639,7 +639,12 @@ end
 --mob=makemobile(0,makevec2d(7,-2),makeangle(-1/8))
 --mobile_pool.make(makemobile(1,makevec2d(4,-4),makeangle(rnd())))
 
-menuitem(1, "debug", function()
+reverse_strafe=false
+menuitem(1, "reverse strafe", function()
+ reverse_strafe = not reverse_strafe
+end)
+
+menuitem(2, "debug", function()
  if debug then
   debug = false
  else
@@ -693,6 +698,9 @@ function _update()
  local offset = makevec2d(0,0)
  local facing = player.bearing:tovector()
  local right = makevec2d(facing.y,-facing.x)
+ if reverse_strafe then
+  right*=-1
+ end
  changed_position=false
  if btn(0) then
   changed_position=true
@@ -711,10 +719,10 @@ function _update()
   tick_walking()
  end
  if btn(4) then
-  offset-=right
+  offset+=right
  end
  if btn(5) then
-  offset+=right
+  offset-=right
  end
  local hitbox_radius=0.5
  local new_coords=player.coords+offset*0.1
