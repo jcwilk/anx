@@ -232,7 +232,7 @@ function _update()
   if btn(5) then
     offset-=right
   end
-  local hitbox_radius=0.5
+  local hitbox_radius=0.45
   local new_coords=player.coords+offset*0.1
   --todo - this code is ugly af
   local door_found=false
