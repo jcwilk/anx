@@ -29,6 +29,7 @@ function raycast_walls()
   local found_mobs
   local mob_draw, draw_stack
   local draw_width
+  local last_tile_occupied
   max_width=0
   clear_draw_cache()
   while screenx<=127 do
@@ -37,6 +38,8 @@ function raycast_walls()
     draw_width=flr(mid(1,8,draw_width))
     max_width=max(max_width,draw_width)
     skipped_columns+=draw_width-1
+
+    last_tile_occupied=false
 
     pv=screenx_to_angle(screenx+(draw_width-1)/2):tovector()
 
@@ -54,6 +57,7 @@ function raycast_walls()
     count=1
     draw_stack={}
     found_mobs={}
+
     while not found and count <= draw_distance do
       count+=1
       reversed=false
@@ -89,11 +93,16 @@ function raycast_walls()
         if band(fget(sprite_id),1) == 0 then
           found=true
         end
-        pixel_col=flr(((intx+inty)%1)*8)
-        if reversed then
-          pixel_col=7-pixel_col
+        if found or not last_tile_occupied then
+          pixel_col=flr(((intx+inty)%1)*8)
+          if reversed then
+            pixel_col=7-pixel_col
+          end
+          add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width))
+          last_tile_occupied=true
         end
-        add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width))
+      else
+        last_tile_occupied=false
       end
       if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
         for mobi in all(mob_pos_map[currx][curry]) do
