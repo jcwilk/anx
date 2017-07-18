@@ -89,8 +89,8 @@ function raycast_walls()
       end
 
       sprite_id=mget(currx,-curry)
-      if sprite_id > 0 then
-        if band(fget(sprite_id),1) == 0 then
+      if sprite_id > 0 and not fget(sprite_id,7) then
+        if not fget(sprite_id,0) then
           found=true
         end
         if found or not last_tile_occupied then
@@ -137,24 +137,15 @@ end
 mobile_pool = make_pool()
 wall_pool = make_pool()
 player =makemobile(false,makevec2d(8.3,-2.5),makeangle(-1/4))
-mob_locations = {
-  {2.8,-1.3},
-  {2.1,-5.3},
-  {12.2,-7.5},
-  {14.2,-7.8},
-  {15.1,-6.6},
-  {18,1},
-  {19.5,-1},
-  {20,-2},
-  {20,-3},
-  {13,-13}
-}
-for mob_location in all(mob_locations) do
-  mobile_pool.make(makemobile(flr(rnd(2)),makevec2d(mob_location[1],mob_location[2]),makeangle(rnd())))
+
+for x=0,127 do
+  for y=0,63 do
+    mob_id=mget(x,y)
+    if fget(mob_id,7) then
+      mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
+    end
+  end
 end
---mobile_pool.make()
---mob=makemobile(0,makevec2d(7,-2),makeangle(-1/8))
---mobile_pool.make(makemobile(1,makevec2d(4,-4),makeangle(rnd())))
 
 reverse_strafe=false
 menuitem(1, "reverse strafe", function()
@@ -248,7 +239,7 @@ function _update()
   for checkx=round(new_coords.x-hitbox_radius),round(new_coords.x+hitbox_radius) do
     for checky=round(player.coords.y-hitbox_radius),round(player.coords.y+hitbox_radius) do
       sprite_id = mget(checkx,-checky)
-      if (not door_found) and sprite_id > 0 then
+      if (not door_found) and sprite_id > 0 and not fget(sprite_id,7) then
         if fget(sprite_id,1) then
           door_found=mget(checkx+tounit(offset.x),-checky)
           new_coords.x=checkx+2.5*tounit(offset.x)
@@ -262,7 +253,7 @@ function _update()
   for checkx=round(player.coords.x-hitbox_radius),round(player.coords.x+hitbox_radius) do
     for checky=round(new_coords.y-hitbox_radius),round(new_coords.y+hitbox_radius) do
       sprite_id = mget(checkx,-checky)
-      if (not door_found) and sprite_id > 0 then
+      if (not door_found) and sprite_id > 0 and not fget(sprite_id,7) then
         if fget(sprite_id,1) then
           door_found=mget(checkx,-checky-tounit(offset.y))
           new_coords.x=checkx
