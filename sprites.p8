@@ -473,6 +473,43 @@ makemobile = (function()
     end
   end
 
+  local function filter_movement(mob,movement)
+    local x=mob.coords.x+movement.x
+    local y=mob.coords.y+movement.y
+    local hitbox_radius=0.45
+    local checkx,checky,sprite_id
+    mob.entering_door = false
+    for checkx=round(x-hitbox_radius),round(x+hitbox_radius) do
+      for checky=round(mob.coords.y-hitbox_radius),round(mob.coords.y+hitbox_radius) do
+        sprite_id = mget(checkx,-checky)
+        if (not mob.entering_door) and sprite_id > 0 and not fget(sprite_id,7) then
+          if fget(sprite_id,1) then
+            mob.entering_door=mget(checkx+tounit(movement.x),-checky)
+            x=checkx+2.5*tounit(movement.x)
+            y=checky
+          else
+            x=mob.coords.x
+          end
+        end
+      end
+    end
+    for checkx=round(mob.coords.x-hitbox_radius),round(mob.coords.x+hitbox_radius) do
+      for checky=round(y-hitbox_radius),round(y+hitbox_radius) do
+        sprite_id = mget(checkx,-checky)
+        if (not mob.entering_door) and sprite_id > 0 and not fget(sprite_id,7) then
+          if fget(sprite_id,1) then
+            mob.entering_door=mget(checkx,-checky-tounit(movement.y))
+            x=checkx
+            y=checky+2.5*tounit(movement.y)
+          else
+            y=mob.coords.y
+          end
+        end
+      end
+    end
+    return makevec2d(x,y)
+  end
+
   return function(sprite_id,coords,bearing)
     mob_id_counter+=1
     return {
@@ -483,7 +520,9 @@ makemobile = (function()
       turn_towards_player=turnto,
       deferred_draw=deferred_mob_draw,
       talk_delay=0,
-      talk=talk
+      talk=talk,
+      filter_movement=filter_movement,
+      entering_door=false
     }
   end
 end)()

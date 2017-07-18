@@ -232,43 +232,13 @@ function _update()
   if btn(5) then
     offset-=right
   end
-  local hitbox_radius=0.45
-  local new_coords=player.coords+offset*0.1
-  --todo - this code is ugly af
-  local door_found=false
-  for checkx=round(new_coords.x-hitbox_radius),round(new_coords.x+hitbox_radius) do
-    for checky=round(player.coords.y-hitbox_radius),round(player.coords.y+hitbox_radius) do
-      sprite_id = mget(checkx,-checky)
-      if (not door_found) and sprite_id > 0 and not fget(sprite_id,7) then
-        if fget(sprite_id,1) then
-          door_found=mget(checkx+tounit(offset.x),-checky)
-          new_coords.x=checkx+2.5*tounit(offset.x)
-          new_coords.y=checky
-        else
-          new_coords.x=player.coords.x
-        end
-      end
-    end
-  end
-  for checkx=round(player.coords.x-hitbox_radius),round(player.coords.x+hitbox_radius) do
-    for checky=round(new_coords.y-hitbox_radius),round(new_coords.y+hitbox_radius) do
-      sprite_id = mget(checkx,-checky)
-      if (not door_found) and sprite_id > 0 and not fget(sprite_id,7) then
-        if fget(sprite_id,1) then
-          door_found=mget(checkx,-checky-tounit(offset.y))
-          new_coords.x=checkx
-          new_coords.y=checky+2.5*tounit(offset.y)
-        else
-          new_coords.y=player.coords.y
-        end
-      end
-    end
-  end
 
-  if door_found == 11 then
+  new_coords=player:filter_movement(offset*0.1)
+
+  if player.entering_door == 11 then
     sky_color=1
     ground_color=3
-  elseif door_found == 5 then
+  elseif player.entering_door == 5 then
     sky_color=7
     ground_color=2
   end
@@ -290,7 +260,7 @@ function _update()
     if distance < 4 then
       if abs(m:turn_towards_player()) < .1 then
         if distance > 2 then
-          m.coords-= m_to_p/distance*.04
+          m.coords=m:filter_movement(m_to_p/distance*-.04)
         else
           m:talk()
         end
