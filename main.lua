@@ -233,7 +233,11 @@ function _update()
     offset-=right
   end
 
-  new_coords=player:filter_movement(offset*0.1)
+  if offset:diamond_distance() > 0 then
+    changed_position=true
+  end
+
+  player:apply_movement(offset*0.1)
 
   if player.entering_door == 11 then
     sky_color=1
@@ -241,11 +245,6 @@ function _update()
   elseif player.entering_door == 5 then
     sky_color=7
     ground_color=2
-  end
-
-  if player.coords.x != new_coords.x or player.coords.y != new_coords.y then
-    changed_position=true
-    player.coords=new_coords
   end
 
   tick_anxiety()
@@ -260,7 +259,7 @@ function _update()
     if distance < 4 then
       if abs(m:turn_towards_player()) < .1 then
         if distance > 2 then
-          m.coords=m:filter_movement(m_to_p/distance*-.04)
+          m:apply_movement(m_to_p/distance*-.04)
         else
           m:talk()
         end

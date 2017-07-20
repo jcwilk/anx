@@ -473,41 +473,61 @@ makemobile = (function()
   end
  end
 
- local function filter_movement(mob,movement)
-  local x=mob.coords.x+movement.x
-  local y=mob.coords.y+movement.y
-  local hitbox_radius=0.45
-  local checkx,checky,sprite_id
-  mob.entering_door = false
-  for checkx=round(x-hitbox_radius),round(x+hitbox_radius) do
-   for checky=round(mob.coords.y-hitbox_radius),round(mob.coords.y+hitbox_radius) do
-    sprite_id = mget(checkx,-checky)
-    if (not mob.entering_door) and sprite_id > 0 and not fget(sprite_id,7) then
+ local function filter_axis(mob,axis,diff)
+  --TODO - the if/else in here suck but it's awkward anyways
+  local orig=mob.coords[axis]
+  local val=orig+diff
+  local filtered=val
+  local sprite_id,cross,x,y
+  if axis=='x' then
+   cross=mob.coords['y']
+  else
+   cross=mob.coords['x']
+  end
+
+  for curr_axis=round(val-mob.hitbox_radius),round(val+mob.hitbox_radius) do
+   for curr_cross=round(cross-mob.hitbox_radius),round(cross+mob.hitbox_radius) do
+    if axis=='x' then
+     sprite_id = mget(curr_axis,-curr_cross)
+    else
+     sprite_id = mget(curr_cross,-curr_axis)
+    end
+    if not mob.sprite_id and sprite_id > 0 and not fget(sprite_id,7) then
      if fget(sprite_id,1) then
-      mob.entering_door=mget(checkx+tounit(movement.x),-checky)
-      x=checkx+2.5*tounit(movement.x)
-      y=checky
+      if axis=='x' then
+       mob.entering_door=mget(curr_axis+tounit(diff),-curr_cross)
+       x=curr_axis+2.5*tounit(diff)
+       y=curr_cross
+      else
+       mob.entering_door=mget(curr_cross,-curr_axis-tounit(diff))
+       x=curr_cross
+       y=curr_axis+2.5*tounit(diff)
+      end
+      mob.coords = makevec2d(x,y)
+      return
      else
-      x=mob.coords.x
+      filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
      end
     end
    end
   end
-  for checkx=round(mob.coords.x-hitbox_radius),round(mob.coords.x+hitbox_radius) do
-   for checky=round(y-hitbox_radius),round(y+hitbox_radius) do
-    sprite_id = mget(checkx,-checky)
-    if (not mob.entering_door) and sprite_id > 0 and not fget(sprite_id,7) then
-     if fget(sprite_id,1) then
-      mob.entering_door=mget(checkx,-checky-tounit(movement.y))
-      x=checkx
-      y=checky+2.5*tounit(movement.y)
-     else
-      y=mob.coords.y
-     end
-    end
-   end
+
+  return filtered
+ end
+
+ local function apply_movement(mob,movement)
+  mob.entering_door=false
+  local x=filter_axis(mob,'x',movement.x)
+
+  if mob.entering_door then
+   return
   end
-  return makevec2d(x,y)
+
+  local y=filter_axis(mob,'y',movement.y)
+
+  if not mob.entering_door then
+   mob.coords = makevec2d(x,y)
+  end
  end
 
  return function(sprite_id,coords,bearing)
@@ -521,8 +541,9 @@ makemobile = (function()
    deferred_draw=deferred_mob_draw,
    talk_delay=0,
    talk=talk,
-   filter_movement=filter_movement,
-   entering_door=false
+   apply_movement=apply_movement,
+   entering_door=false,
+   hitbox_radius=0.45
   }
  end
 end)()
@@ -764,7 +785,11 @@ function _update()
   offset-=right
  end
 
- new_coords=player:filter_movement(offset*0.1)
+ if offset:diamond_distance() > 0 then
+  changed_position=true
+ end
+
+ player:apply_movement(offset*0.1)
 
  if player.entering_door == 11 then
   sky_color=1
@@ -772,11 +797,6 @@ function _update()
  elseif player.entering_door == 5 then
   sky_color=7
   ground_color=2
- end
-
- if player.coords.x != new_coords.x or player.coords.y != new_coords.y then
-  changed_position=true
-  player.coords=new_coords
  end
 
  tick_anxiety()
@@ -791,7 +811,7 @@ function _update()
   if distance < 4 then
    if abs(m:turn_towards_player()) < .1 then
     if distance > 2 then
-     m.coords=m:filter_movement(m_to_p/distance*-.04)
+     m:apply_movement(m_to_p/distance*-.04)
     else
      m:talk()
     end
