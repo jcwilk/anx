@@ -244,36 +244,46 @@ cached_sprites={}
 
 function cache_sprite(sprite_id)
   if not cached_sprites[sprite_id] then
+    local pixels_tall=16
+    if fget(sprite_id,2) then
+      pixels_tall=8
+    end
     local spritex=8*(sprite_id%16)
     local spritey=8*flr(sprite_id/16)
     cached_sprites[sprite_id]={}
-    for cx=0,7 do
+    for cx=1,8 do
       cached_sprites[sprite_id][cx]={}
-      for cy=0,15 do
-        cached_sprites[sprite_id][cx][cy]=sget(spritex+cx,spritey+cy)
+      for cy=1,pixels_tall do
+        cached_sprites[sprite_id][cx][cy]=sget(spritex+cx-1,spritey+cy-1)
       end
     end
   end
 end
 
 function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
-  local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
-  local height=2*height_scale/distance/field_of_view
-  local screeny=64-height*(1-height_ratio)
-
   cache_sprite(sprite_id)
 
-  local pixel_height=height/16
+  local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
+
+  local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
+  if distance < .1 then
+    return
+  end
+  local sprite_height=height_scale/distance/field_of_view
+  local height=sprites_tall*sprite_height
+  local screeny=64+2*sprite_height*height_ratio-height
+
+  local pixel_height=height/sprites_tall/8
   local screenxright=screenx+draw_width-1
 
-  local pixel_column=cached_sprites[sprite_id][pixel_col]
+  local pixel_column=cached_sprites[sprite_id][pixel_col+1]
   return function()
     local pixel_color, offset_check, check_col
 
-    for pixel_row=0,15 do
+    for pixel_row=1,(sprites_tall*8) do
       pixel_color=pixel_column[pixel_row]
       if pixel_color > 0 then
-        rectfill(screenx,screeny+pixel_row*pixel_height,screenxright,screeny+(pixel_row+1)*pixel_height-1,pixel_color)
+        rectfill(screenx,screeny+pixel_row*pixel_height-pixel_height,screenxright,screeny+pixel_row*pixel_height-1,pixel_color)
       end
     end
   end
@@ -492,7 +502,7 @@ makemobile = (function()
         else
           sprite_id = mget(curr_cross,-curr_axis)
         end
-        if not mob.sprite_id and sprite_id > 0 and not fget(sprite_id,7) then
+        if not mob.sprite_id and sprite_id > 0 and not fget(sprite_id,7) and not fget(sprite_id,3) then
           if fget(sprite_id,1) then
             if axis=='x' then
               mob.entering_door=mget(curr_axis+tounit(diff),-curr_cross)

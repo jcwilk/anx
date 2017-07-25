@@ -93,14 +93,15 @@ function raycast_walls()
         if not fget(sprite_id,0) then
           found=true
         end
-        if found or not last_tile_occupied then
+
+        if found or not last_tile_occupied or (last_tile_occupied != sprite_id and fget(last_tile_occupied,3)) then
           pixel_col=flr(((intx+inty)%1)*8)
           if reversed then
             pixel_col=7-pixel_col
           end
           add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width))
-          last_tile_occupied=true
         end
+        last_tile_occupied=sprite_id
       else
         last_tile_occupied=false
       end
@@ -136,7 +137,7 @@ end
 
 mobile_pool = make_pool()
 wall_pool = make_pool()
-player =makemobile(false,makevec2d(8.3,-2.5),makeangle(-1/4))
+player =makemobile(false,makevec2d(8,-30),makeangle(-1/4))
 
 for x=0,127 do
   for y=0,63 do
@@ -269,13 +270,14 @@ function _update()
 end
 
 function draw_stars()
+  --TODO fuckin thing sucks
   local x,y,angle
   color(7)
-  angle=player.bearing-1/16
+  angle=player.bearing-field_of_view/2
   local init=flr(angle.val*100)
-  local final=flr((angle.val+1/8)*100)
+  local final=flr((angle.val+field_of_view)*100)
   for i=init,final do
-    pset((i-init)/100*8*128,((i*19)%64))
+    pset((i-init)/100/field_of_view*128,64-((i*19)%64)/8/field_of_view)
   end
 end
 
@@ -284,15 +286,23 @@ function sort_by_distance(m)
 end
 
 mob_pos_map={}
-sky_color=7
-ground_color=2
-fog_color=1
+sky_color=1
+ground_color=0
+fog_color=0
 function _draw()
   rectfill(0,0,127,63,sky_color)
   rectfill(0,64,127,127,ground_color)
-  local fog_height=height_scale*2/draw_distance/field_of_view
-  rectfill(0,64-fog_height*(1-height_ratio),127,64+fog_height*height_ratio,fog_color)
-  --draw_stars()
+  draw_stars()
+  local fog_height=height_scale*2/(draw_distance-1)/field_of_view
+  local fog_bottom=64-fog_height*(1-height_ratio)
+  rectfill(0,fog_bottom,127,fog_bottom+fog_height,ground_color)
+  for i=0,127 do
+    for j=fog_bottom,fog_bottom+fog_height-1,2 do
+      pset(i,j+i%2,sky_color)
+    end
+  end
+
+
   --draw_walls()
   mob_pos_map={}
   mobile_pool:each(function(mob)
