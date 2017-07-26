@@ -518,6 +518,8 @@ makemobile = (function()
           else
             filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
           end
+        elseif sprite_id > 0 and not fget(sprite_id,7) and not fget(sprite_id,3) then --TODO clean this up
+          filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
         end
       end
     end

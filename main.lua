@@ -1,5 +1,6 @@
 -- START LIB
-field_of_view=1/8 -- 45*
+orig_field_of_view=1/4
+field_of_view=orig_field_of_view -- 45*
 draw_distance=12
 height_scale=20 -- multiplier for something at distance of one after dividing by field of view
 height_ratio=0.6
@@ -186,7 +187,7 @@ end
 function recalc_settings()
   -- https://www.desmos.com/calculator/pw8n3n8rwf
   local anxiety_factor = -1/(-.4*current_anxiety-2)+.5
-  field_of_view = 1/8*anxiety_factor
+  field_of_view = orig_field_of_view*anxiety_factor
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
 end
 
@@ -277,7 +278,7 @@ function draw_stars()
   local init=flr(angle.val*100)
   local final=flr((angle.val+field_of_view)*100)
   for i=init,final do
-    pset((i-init)/100/field_of_view*128,64-((i*19)%64)/8/field_of_view)
+    pset((i-init)/100/field_of_view*128,64-((i*19)%64)*orig_field_of_view/field_of_view)
   end
 end
 
