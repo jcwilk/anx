@@ -1,5 +1,5 @@
 -- START LIB
-orig_field_of_view=1/4
+orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
 draw_distance=12
 height_scale=20 -- multiplier for something at distance of one after dividing by field of view
