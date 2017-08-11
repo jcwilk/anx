@@ -254,19 +254,7 @@ function _update()
   recalc_settings()
 
   mobile_pool:each(function(m)
-    --m.bearing+=.01
-    --m:turn_towards_player()
-    local m_to_p=m.coords-player.coords
-    local distance=m_to_p:tomagnitude()
-    if distance < 4 then
-      if abs(m:turn_towards_player()) < .1 then
-        if distance > 2 then
-          m:apply_movement(m_to_p/distance*-.04)
-        else
-          m:talk()
-        end
-      end
-    end
+    m:update()
   end)
 end
 

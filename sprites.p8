@@ -348,7 +348,13 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local spritex=8*(mob.sprite_id%16)
   local spritey=8*(mob.sprite_id/16)
 
-  for row_i=0,15 do
+  local total_rows=16
+  if fget(mob.sprite_id,2) then --hax for half height mobs
+    total_rows=8
+    spritey-=8
+  end
+
+  for row_i=16-total_rows,15 do
     row={
       yo=flr(screeny+row_i/16*height),
       yf=flr(screeny+(row_i+1)/16*height)-1,
@@ -421,7 +427,7 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
       end
     end
 
-    if not found and #mob_data.columns>0 and mob_data.columns[#mob_data.columns].xf+mob_data.side_length >= screenx then
+    if not found then
       side_only=true
     end
 
@@ -542,9 +548,27 @@ makemobile = (function()
     end
   end
 
+  local function default_update(mob)
+    local m_to_p=mob.coords-player.coords
+    local distance=m_to_p:tomagnitude()
+    if distance < 4 then
+      if abs(mob:turn_towards_player()) < .1 then
+        if distance > 2 then
+          mob:apply_movement(m_to_p/distance*-.04)
+        else
+          mob:talk()
+        end
+      end
+    end
+  end
+
+  local function spin(mob)
+    mob.bearing+=.01
+  end
+
   return function(sprite_id,coords,bearing)
     mob_id_counter+=1
-    return {
+    local obj = {
       id=mob_id_counter,
       sprite_id=sprite_id,
       coords=coords,
@@ -557,6 +581,12 @@ makemobile = (function()
       entering_door=false,
       hitbox_radius=0.45
     }
+    if sprite_id == 17 then
+      obj.update=spin
+    else
+      obj.update=default_update
+    end
+    return obj
   end
 end)()
 
