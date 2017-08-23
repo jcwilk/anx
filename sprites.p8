@@ -242,10 +242,38 @@ end
 
 cached_sprites={}
 
+function is_sprite_wall(sprite_id)
+  return sprite_id > 0 and not fget(sprite_id,7) and not fget(sprite_id,6)
+end
+
+function is_sprite_wall_transparent(sprite_id)
+  return fget(sprite_id,0)
+end
+
+function is_sprite_mob(sprite_id)
+  return fget(mob_id,7)
+end
+
+function is_sprite_skybox(sprite_id)
+  return fget(sprite_id,6)
+end
+
+function is_sprite_half_height(sprite_id)
+  return fget(sprite_id,2)
+end
+
+function is_sprite_wall_solid(sprite_id)
+  return not fget(sprite_id,3)
+end
+
+function is_sprite_door(sprite_id)
+  return fget(sprite_id,1)
+end
+
 function cache_sprite(sprite_id)
   if not cached_sprites[sprite_id] then
     local pixels_tall=16
-    if fget(sprite_id,2) then
+    if is_sprite_half_height(sprite_id) then
       pixels_tall=8
     end
     local spritex=8*(sprite_id%16)
@@ -354,7 +382,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local spritey=8*(mob.sprite_id/16)
 
   local total_rows=16
-  if fget(mob.sprite_id,2) then --hax for half height mobs
+  if is_sprite_half_height(mob.sprite_id) then --hax for half height mobs
     total_rows=8
     spritey-=8
   end
@@ -517,23 +545,9 @@ makemobile = (function()
         else
           sprite_id = mget(curr_cross,-curr_axis)
         end
-        if not mob.sprite_id and sprite_id > 0 and not fget(sprite_id,7) and not fget(sprite_id,3) then
-          if fget(sprite_id,1) then
-            if axis=='x' then
-              mob.entering_door=mget(curr_axis+tounit(diff),-curr_cross)
-              x=curr_axis+2.5*tounit(diff)
-              y=curr_cross
-            else
-              mob.entering_door=mget(curr_cross,-curr_axis-tounit(diff))
-              x=curr_cross
-              y=curr_axis+2.5*tounit(diff)
-            end
-            mob.coords = makevec2d(x,y)
-            return
-          else
-            filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
-          end
-        elseif sprite_id > 0 and not fget(sprite_id,7) and not fget(sprite_id,3) then --TODO clean this up
+        if not mob.sprite_id and is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
+          filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
+        elseif is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
           filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
         end
       end
@@ -545,16 +559,8 @@ makemobile = (function()
   local function apply_movement(mob,movement)
     mob.entering_door=false
     local x=filter_axis(mob,'x',movement.x)
-
-    if mob.entering_door then
-      return
-    end
-
     local y=filter_axis(mob,'y',movement.y)
-
-    if not mob.entering_door then
-      mob.coords = makevec2d(x,y)
-    end
+    mob.coords = makevec2d(x,y)
   end
 
   local function default_update(mob)
@@ -590,7 +596,7 @@ makemobile = (function()
       entering_door=false,
       hitbox_radius=0.45
     }
-    if sprite_id == 17 then
+    if sprite_id == 17 or sprite_id == 16 then
       obj.update=spin
     else
       obj.update=default_update

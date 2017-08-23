@@ -6,6 +6,11 @@ height_scale=20 -- multiplier for something at distance of one after dividing by
 height_ratio=.6
 distance_to_screen=.5
 
+function set_skybox(sprite_id)
+  sky_color=sget(8*(sprite_id%16),8*flr(sprite_id/16))
+  ground_color=sget(8*(sprite_id%16),8*flr(sprite_id/16)+4)
+end
+
 start_time=0
 max_width=0
 function raycast_walls()
@@ -91,12 +96,12 @@ function raycast_walls()
       end
 
       sprite_id=mget(currx,-curry)
-      if sprite_id > 0 and not fget(sprite_id,7) then
-        if not fget(sprite_id,0) then
+      if is_sprite_wall(sprite_id) then
+        if not is_sprite_wall_transparent(sprite_id) then
           found=true
         end
 
-        if found or not last_tile_occupied or (last_tile_occupied != sprite_id and fget(last_tile_occupied,3)) then
+        if found or not last_tile_occupied or (last_tile_occupied != sprite_id and is_sprite_wall_transparent(sprite_id)) then
           pixel_col=flr(((intx+inty)%1)*8)
           if reversed then
             pixel_col=7-pixel_col
@@ -108,6 +113,10 @@ function raycast_walls()
         end
         last_tile_occupied=sprite_id
       else
+        if need_new_skybox and is_sprite_skybox(sprite_id) then
+          need_new_skybox=false
+          set_skybox(sprite_id)
+        end
         last_tile_occupied=false
       end
       if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
@@ -151,7 +160,7 @@ player =makemobile(false,makevec2d(8,-30),makeangle(-1/4))
 for x=0,127 do
   for y=0,63 do
     mob_id=mget(x,y)
-    if fget(mob_id,7) then
+    if is_sprite_mob(mob_id) then
       mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
     end
   end
@@ -249,12 +258,11 @@ function _update()
 
   player:apply_movement(offset*0.1)
 
-  if player.entering_door == 11 then
-    sky_color=1
-    ground_color=3
-  elseif player.entering_door == 5 then
-    sky_color=7
-    ground_color=2
+  local curr_tile_sprite_id=mget(round(player.coords.x),round(-player.coords.y))
+  if is_sprite_door(curr_tile_sprite_id) then
+    need_new_skybox=true
+  elseif is_sprite_skybox(curr_tile_sprite_id) then
+    set_skybox(curr_tile_sprite_id)
   end
 
   tick_anxiety()
@@ -282,11 +290,7 @@ function sort_by_distance(m)
   return (m.coords-player.coords):diamond_distance()
 end
 
-mob_pos_map={}
-sky_color=1
-ground_color=0
-fog_color=0
-function _draw()
+function draw_background()
   rectfill(0,0,127,63,sky_color)
   rectfill(0,64,127,127,ground_color)
   draw_stars()
@@ -298,15 +302,19 @@ function _draw()
       pset(i,j+i%2,sky_color)
     end
   end
+end
 
+mob_pos_map={}
+sky_color=1
+ground_color=0
+fog_color=0
+function _draw()
+  draw_background()
 
-  --draw_walls()
   mob_pos_map={}
   mobile_pool:each(function(mob)
     for x=flr(mob.coords.x),ceil(mob.coords.x) do
       for y=flr(mob.coords.y),ceil(mob.coords.y) do
-    -- local x=round(mob.coords.x)
-    -- local y=round(mob.coords.y)
         mob_pos_map[x] = mob_pos_map[x] or {}
         mob_pos_map[x][y] = mob_pos_map[x][y] or {}
         add(mob_pos_map[x][y],mob)
