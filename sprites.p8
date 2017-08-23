@@ -510,8 +510,8 @@ end
 makemobile = (function()
   local mob_id_counter=0
 
-  local function turnto(m)
-    local bearing_diff=((m.coords-player.coords):tobearing()-m.bearing).val-.5
+  local function turnto(m,target)
+    local bearing_diff=((m.coords-target.coords):tobearing()-m.bearing).val-.5
     m.bearing+=mid(-.01,.01,bearing_diff)
     return bearing_diff
   end
@@ -520,7 +520,7 @@ makemobile = (function()
     if m.talk_delay <= 0 then
       sfx(flr(rnd(4)))
       m.talk_delay=30+rnd(10)
-      add_anxiety()
+      add_anxiety(player:turn_towards(m))
     else
       m.talk_delay-=1
     end
@@ -538,28 +538,40 @@ makemobile = (function()
       cross=mob.coords['x']
     end
 
-    for curr_axis=round(val-mob.hitbox_radius),round(val+mob.hitbox_radius) do
-      for curr_cross=round(cross-mob.hitbox_radius),round(cross+mob.hitbox_radius) do
-        if axis=='x' then
-          sprite_id = mget(curr_axis,-curr_cross)
-        else
-          sprite_id = mget(curr_cross,-curr_axis)
-        end
-        if not mob.sprite_id and is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
-          filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
-        elseif is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
-          filtered = curr_axis-tounit(diff)*(.5+mob.hitbox_radius+.001)
-        end
+    local front_edge = orig+mob.hitbox_radius*tounit(diff)
+    local curr_axis = round(front_edge+diff)
+
+    for curr_cross=round(cross-mob.hitbox_radius),round(cross+mob.hitbox_radius) do
+      if axis=='x' then
+        sprite_id = mget(curr_axis,-curr_cross)
+      else
+        sprite_id = mget(curr_cross,-curr_axis)
+      end
+      if is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
+        return orig
       end
     end
 
-    return filtered
+    return val
   end
 
   local function apply_movement(mob,movement)
     mob.entering_door=false
-    local x=filter_axis(mob,'x',movement.x)
-    local y=filter_axis(mob,'y',movement.y)
+    local x,y
+    x=filter_axis(mob,'x',movement.x)
+    y=filter_axis(mob,'y',movement.y)
+
+    local proposed_tile_id=mget(round(x+tounit(movement.x)*mob.hitbox_radius), -round(y+tounit(movement.y)*mob.hitbox_radius))
+
+    -- workaround for getting stuck on the corner
+    if is_sprite_wall(proposed_tile_id) and is_sprite_wall_solid(proposed_tile_id) then
+      if abs(movement.x) > abs(movement.y) then
+        y=mob.coords.y
+      else
+        x=mob.coords.x
+      end
+    end
+
     mob.coords = makevec2d(x,y)
   end
 
@@ -567,7 +579,7 @@ makemobile = (function()
     local m_to_p=mob.coords-player.coords
     local distance=m_to_p:tomagnitude()
     if distance < 4 then
-      if abs(mob:turn_towards_player()) < .1 then
+      if abs(mob:turn_towards(player)) < .1 then
         if distance > 2 then
           mob:apply_movement(m_to_p/distance*-.04)
         else
@@ -588,7 +600,7 @@ makemobile = (function()
       sprite_id=sprite_id,
       coords=coords,
       bearing=bearing,
-      turn_towards_player=turnto,
+      turn_towards=turnto,
       deferred_draw=deferred_mob_draw,
       talk_delay=0,
       talk=talk,

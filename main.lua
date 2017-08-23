@@ -208,17 +208,13 @@ function recalc_settings()
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
 end
 
-function nudge_player()
-  if rnd()>.5 then
-    player_bearing_v+=.005
-  else
-    player_bearing_v-=.005
-  end
+function nudge_player(angle)
+  player_bearing_v+=angle/30+tounit(angle)/100
 end
 
-function add_anxiety()
+function add_anxiety(angle)
   current_anxiety+=3
-  nudge_player()
+  nudge_player(angle)
 end
 
 function _update()
