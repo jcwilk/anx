@@ -3,7 +3,8 @@ orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
 draw_distance=12
 height_scale=20 -- multiplier for something at distance of one after dividing by field of view
-height_ratio=0.6
+height_ratio=.6
+distance_to_screen=.5
 
 start_time=0
 max_width=0
@@ -28,7 +29,7 @@ function raycast_walls()
 
   local skipped_columns=0
   local found_mobs
-  local mob_draw, draw_stack
+  local new_draw, deferred_draws
   local draw_width
   local last_tile_occupied
   max_width=0
@@ -56,7 +57,7 @@ function raycast_walls()
     curry=round(player.coords.y)
     found=false
     count=1
-    draw_stack={}
+    deferred_draws=make_pool()
     found_mobs={}
 
     while not found and count <= draw_distance do
@@ -100,7 +101,10 @@ function raycast_walls()
           if reversed then
             pixel_col=7-pixel_col
           end
-          add(draw_stack,deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width))
+          new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
+          if new_draw then
+            deferred_draws.make(new_draw)
+          end
         end
         last_tile_occupied=sprite_id
       else
@@ -109,19 +113,23 @@ function raycast_walls()
       if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
         for mobi in all(mob_pos_map[currx][curry]) do
           if not found_mobs[mobi.id] then
-            mob_draw=mobi:deferred_draw(pv,screenx,draw_width)
-            if mob_draw then
+            new_draw=mobi:deferred_draw(pv,screenx,draw_width)
+            if new_draw then
               found_mobs[mobi.id]=true
-              add(draw_stack,mob_draw)
+              deferred_draws.make(new_draw)
             end
           end
         end
       end
     end
 
-    for stack_i=#draw_stack,1,-1 do
-      draw_stack[stack_i]()
-    end
+    deferred_draws:sort_by(function(d)
+      return d.distance
+    end)
+
+    deferred_draws:each(function(d)
+      d.draw()
+    end)
 
     if debug and draw_width>1 then
       line(screenx+1,127,screenx+draw_width-1,127,8)
@@ -295,8 +303,10 @@ function _draw()
   --draw_walls()
   mob_pos_map={}
   mobile_pool:each(function(mob)
-    for x=flr(mob.coords.x),flr(mob.coords.x)+1 do
-      for y=flr(mob.coords.y),flr(mob.coords.y)+1 do
+    for x=flr(mob.coords.x),ceil(mob.coords.x) do
+      for y=flr(mob.coords.y),ceil(mob.coords.y) do
+    -- local x=round(mob.coords.x)
+    -- local y=round(mob.coords.y)
         mob_pos_map[x] = mob_pos_map[x] or {}
         mob_pos_map[x][y] = mob_pos_map[x][y] or {}
         add(mob_pos_map[x][y],mob)

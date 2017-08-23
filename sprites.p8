@@ -269,6 +269,7 @@ function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
   if distance < .1 then
     return
   end
+  distance+=distance_to_screen
   local sprite_height=height_scale/distance/field_of_view
   local height=sprites_tall*sprite_height
   local screeny=64+2*sprite_height*height_ratio-height
@@ -277,16 +278,19 @@ function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
   local screenxright=screenx+draw_width-1
 
   local pixel_column=cached_sprites[sprite_id][pixel_col+1]
-  return function()
-    local pixel_color, offset_check, check_col
+  return {
+    distance=distance,
+    draw=function()
+      local pixel_color, offset_check, check_col
 
-    for pixel_row=1,(sprites_tall*8) do
-      pixel_color=pixel_column[pixel_row]
-      if pixel_color > 0 then
-        rectfill(screenx,screeny+pixel_row*pixel_height-pixel_height,screenxright,screeny+pixel_row*pixel_height-1,pixel_color)
+      for pixel_row=1,(sprites_tall*8) do
+        pixel_color=pixel_column[pixel_row]
+        if pixel_color > 0 then
+          rectfill(screenx,screeny+pixel_row*pixel_height-pixel_height,screenxright,screeny+pixel_row*pixel_height-1,pixel_color)
+        end
       end
     end
-  end
+  }
 end
 
 cached_mobs={}
@@ -311,6 +315,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local vec_to_mob=mob.coords-player.coords
   local distance=vec_to_mob:tomagnitude()
   local normal_vec_to_mob=vec_to_mob/distance
+  distance+=distance_to_screen
 
   local width_vector=(mob_bearing-.25):tovector()
   local side_length=(width_vector*normal_vec_to_mob)/8
@@ -395,7 +400,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local mob_data={
     rows=rows,
     columns=columns,
-    side_length=tounit(side_length*face_length)*screen_side
+    side_length=tounit(side_length*face_length)*screen_side,
+    distance=distance
   }
 
   cached_mobs[mob.id]=mob_data
@@ -406,68 +412,71 @@ end
 function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
   local mob_data=cache_mob(mob,dir_vector,screenx,draw_width)
 
-  return function()
-    local pixel_col
-    local found=false
-    local column, pixel
-    local col_i=0
-    local side_only=false
-    while not found and col_i < #mob_data.columns do
-      col_i+=1
-      column=mob_data.columns[col_i]
-      if column.xo <= screenx then
-        if column.xf >= screenx then
+  return {
+    distance=mob_data.distance,
+    draw=function()
+      local pixel_col
+      local found=false
+      local column, pixel
+      local col_i=0
+      local side_only=false
+      while not found and col_i < #mob_data.columns do
+        col_i+=1
+        column=mob_data.columns[col_i]
+        if column.xo <= screenx then
+          if column.xf >= screenx then
+            found=true
+          end
+        elseif column.xo+mob_data.side_length <= screenx then
+          side_only=true
           found=true
-        end
-      elseif column.xo+mob_data.side_length <= screenx then
-        side_only=true
-        found=true
-      else
-        return
-      end
-    end
-
-    if not found then
-      side_only=true
-    end
-
-    local screenxright=screenx+draw_width-1
-    local side_i,side
-
-    for row in all(mob_data.rows) do
-      pixel=row.pixels[col_i]
-      if not side_only and pixel > 0 then
-        rectfill(screenx,row.yo,screenxright,row.yf,pixel)
-      else
-        found=false
-        if mob_data.side_length <= 0 then
-          side_i=0
-          while not found and side_i < #row.sides do
-            side_i+=1
-            side=row.sides[side_i]
-            if side.xo <= screenx and side.xf >= screenx then
-              found=true
-              rectfill(screenx,row.yo,screenxright,row.yf,side.color)
-            elseif screenx < side.xo then
-              found=true
-            end
-          end
         else
-          side_i=#row.sides
-          while not found and side_i > 0 do
-            side=row.sides[side_i]
-            if side.xo <= screenx and side.xf >= screenx then
-              found=true
-              rectfill(screenx,row.yo,screenxright,row.yf,side.color)
-            elseif screenx > side.xf then
-              found=true
+          return
+        end
+      end
+
+      if not found then
+        side_only=true
+      end
+
+      local screenxright=screenx+draw_width-1
+      local side_i,side
+
+      for row in all(mob_data.rows) do
+        pixel=row.pixels[col_i]
+        if not side_only and pixel > 0 then
+          rectfill(screenx,row.yo,screenxright,row.yf,pixel)
+        else
+          found=false
+          if mob_data.side_length <= 0 then
+            side_i=0
+            while not found and side_i < #row.sides do
+              side_i+=1
+              side=row.sides[side_i]
+              if side.xo <= screenx and side.xf >= screenx then
+                found=true
+                rectfill(screenx,row.yo,screenxright,row.yf,side.color)
+              elseif screenx < side.xo then
+                found=true
+              end
             end
-            side_i-=1
+          else
+            side_i=#row.sides
+            while not found and side_i > 0 do
+              side=row.sides[side_i]
+              if side.xo <= screenx and side.xf >= screenx then
+                found=true
+                rectfill(screenx,row.yo,screenxright,row.yf,side.color)
+              elseif screenx > side.xf then
+                found=true
+              end
+              side_i-=1
+            end
           end
         end
       end
     end
-  end
+  }
 end
 
 makemobile = (function()
