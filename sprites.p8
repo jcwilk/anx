@@ -33,6 +33,9 @@ function tounit(n)
  end
 end
 
+function noop_f()
+end
+
 make_pool = (function()
  local function zip_with(pool,pool2)
   local t1=pool.store
@@ -228,13 +231,20 @@ makeangle = (function()
 end)()
 
 function angle_to_screenx(angle)
- return (((angle-player.bearing)+.5).val-.5)/field_of_view*64*2+64
+ local offset_from_center_of_screen = -sin((angle-player.bearing).val) * distance_to_screen
+ local screen_width = -sin(field_of_view/2) * distance_to_screen * 2
+ return round(offset_from_center_of_screen/screen_width * 128 + 127/2)
+
+ -- return (((angle-player.bearing)+.5).val-.5)/field_of_view*64*2+64
 end
 
 function screenx_to_angle(screenx)
- local angle_offset=(screenx/127-.5)*field_of_view
+ local screen_width = -sin(field_of_view/2) * distance_to_screen * 2
+ local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
+ return player.bearing+atan2(offset_from_center_of_screen, distance_to_screen)+1/4
 
- return player.bearing+angle_offset
+ -- local angle_offset=(screenx/127-.5)*field_of_view
+ -- return player.bearing+angle_offset
 end
 -- end ext
 
@@ -288,17 +298,21 @@ function cache_sprite(sprite_id)
   end
 end
 
+function calc_screen_dist_to_xy(x,y)
+  return distance_to_screen / sin(.25+atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val - 1/4)
+end
+
 function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
   cache_sprite(sprite_id)
 
   local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
 
   local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
-  if distance < .1 then
+  if distance < distance_from_player_cutoff then
     return
   end
-  distance+=distance_to_screen
-  local sprite_height=height_scale/distance/field_of_view
+
+  local sprite_height=calc_screen_dist_to_xy(intx,inty)*height_scale/distance/field_of_view
   local height=sprites_tall*sprite_height
   local screeny=64+2*sprite_height*height_ratio-height
 
@@ -343,7 +357,11 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local vec_to_mob=mob.coords-player.coords
   local distance=vec_to_mob:tomagnitude()
   local normal_vec_to_mob=vec_to_mob/distance
-  distance+=distance_to_screen
+
+  if distance < distance_from_player_cutoff then
+    cached_mobs[mob.id]={draw=false}
+    return cached_mobs[mob.id]
+  end
 
   local width_vector=(mob_bearing-.25):tovector()
   local side_length=(width_vector*normal_vec_to_mob)/8
@@ -351,7 +369,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
 
   local side_to_left=side_length*face_length<0
 
-  local height=2*height_scale/distance/field_of_view
+  local height=2*calc_screen_dist_to_xy(mob.coords.x,mob.coords.y)*height_scale/distance/field_of_view
   local screen_width=abs(face_length)*height/2
   local screen_side=abs(side_length)*height/2
 
@@ -429,7 +447,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
     rows=rows,
     columns=columns,
     side_length=tounit(side_length*face_length)*screen_side,
-    distance=distance
+    distance=distance,
+    draw=true
   }
 
   cached_mobs[mob.id]=mob_data
@@ -439,6 +458,14 @@ end
 
 function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
   local mob_data=cache_mob(mob,dir_vector,screenx,draw_width)
+
+  -- This is a bit hacky... but it's ok for now
+  if not mob_data.draw then
+    return {
+      distance=0,
+      draw=noop_f
+    }
+  end
 
   return {
     distance=mob_data.distance,
@@ -606,7 +633,7 @@ makemobile = (function()
       talk=talk,
       apply_movement=apply_movement,
       entering_door=false,
-      hitbox_radius=0.45
+      hitbox_radius=mob_hitbox_radius
     }
     if sprite_id == 17 or sprite_id == 16 then
       obj.update=spin

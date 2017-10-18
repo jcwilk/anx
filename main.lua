@@ -2,9 +2,11 @@
 orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
 draw_distance=12
-height_scale=20 -- multiplier for something at distance of one after dividing by field of view
 height_ratio=.6
-distance_to_screen=.5
+distance_to_screen=.3
+distance_from_player_cutoff=.4
+mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
+height_scale=20/distance_to_screen -- multiplier for something at distance of one after dividing by field of view
 
 function set_skybox(sprite_id)
   sky_color=sget(8*(sprite_id%16),8*flr(sprite_id/16))
@@ -39,6 +41,7 @@ function raycast_walls()
   local last_tile_occupied
   max_width=0
   clear_draw_cache()
+
   while screenx<=127 do
     behind_time=stat(1)-(start_time+screenx/127*alotted_time-buffer_time)
     draw_width=128*behind_time/alotted_time
@@ -290,7 +293,7 @@ function draw_background()
   rectfill(0,0,127,63,sky_color)
   rectfill(0,64,127,127,ground_color)
   draw_stars()
-  local fog_height=height_scale*2/(draw_distance-1)/field_of_view
+  local fog_height=height_scale*2*distance_to_screen/(draw_distance-1)/field_of_view
   local fog_bottom=64-fog_height*(1-height_ratio)
   rectfill(0,fog_bottom,127,fog_bottom+fog_height,ground_color)
   for i=0,127 do
@@ -325,6 +328,7 @@ function _draw()
     print(start_time)
     print(stat(1))
     print("x"..player.coords.x.." y"..player.coords.y)
+    print(player.bearing.val)
   end
 end
 -- END LIB
