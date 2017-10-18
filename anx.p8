@@ -231,17 +231,17 @@ makeangle = (function()
 end)()
 
 function angle_to_screenx(angle)
- local offset_from_center_of_screen = -sin((angle-player.bearing).val) * distance_to_screen
- local screen_width = -sin(field_of_view/2) * distance_to_screen * 2
+ local offset_from_center_of_screen = -sin((angle-player.bearing).val)
+ local screen_width = -sin(field_of_view/2) * 2
  return round(offset_from_center_of_screen/screen_width * 128 + 127/2)
 
  -- return (((angle-player.bearing)+.5).val-.5)/field_of_view*64*2+64
 end
 
 function screenx_to_angle(screenx)
- local screen_width = -sin(field_of_view/2) * distance_to_screen * 2
+ local screen_width = -sin(field_of_view/2) * 2
  local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
- return player.bearing+atan2(offset_from_center_of_screen, distance_to_screen)+1/4
+ return player.bearing+atan2(offset_from_center_of_screen, 1)+1/4
 
  -- local angle_offset=(screenx/127-.5)*field_of_view
  -- return player.bearing+angle_offset
@@ -298,8 +298,9 @@ function cache_sprite(sprite_id)
  end
 end
 
+-- this assumes a distance to the screen of 1 since it cancels out anyways
 function calc_screen_dist_to_xy(x,y)
- return distance_to_screen / sin(.25+atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val - 1/4)
+ return 1 / sin(.25+atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val - 1/4)
 end
 
 function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
@@ -651,10 +652,9 @@ orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
 draw_distance=12
 height_ratio=.6
-distance_to_screen=.3
 distance_from_player_cutoff=.4
 mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
-height_scale=20/distance_to_screen -- multiplier for something at distance of one after dividing by field of view
+height_scale=20 -- multiplier for something at distance of one after dividing by field of view
 
 function set_skybox(sprite_id)
  sky_color=sget(8*(sprite_id%16),8*flr(sprite_id/16))
@@ -941,7 +941,7 @@ function draw_background()
  rectfill(0,0,127,63,sky_color)
  rectfill(0,64,127,127,ground_color)
  draw_stars()
- local fog_height=height_scale*2*distance_to_screen/(draw_distance-1)/field_of_view
+ local fog_height=height_scale*2/(draw_distance-1)/field_of_view
  local fog_bottom=64-fog_height*(1-height_ratio)
  rectfill(0,fog_bottom,127,fog_bottom+fog_height,ground_color)
  for i=0,127 do
