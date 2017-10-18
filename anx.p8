@@ -234,17 +234,12 @@ function angle_to_screenx(angle)
  local offset_from_center_of_screen = -sin((angle-player.bearing).val)
  local screen_width = -sin(field_of_view/2) * 2
  return round(offset_from_center_of_screen/screen_width * 128 + 127/2)
-
- -- return (((angle-player.bearing)+.5).val-.5)/field_of_view*64*2+64
 end
 
 function screenx_to_angle(screenx)
  local screen_width = -sin(field_of_view/2) * 2
  local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
  return player.bearing+atan2(offset_from_center_of_screen, 1)+1/4
-
- -- local angle_offset=(screenx/127-.5)*field_of_view
- -- return player.bearing+angle_offset
 end
 -- end ext
 
@@ -300,7 +295,13 @@ end
 
 -- this assumes a distance to the screen of 1 since it cancels out anyways
 function calc_screen_dist_to_xy(x,y)
- return 1 / sin(.25+atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val - 1/4)
+ if (fisheye == 0) then
+  return 1 / sin(atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val)
+ elseif (fisheye == 1) then
+  return 1 / sqrt(sin(atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val))
+ else
+  return 1
+ end
 end
 
 function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
@@ -822,7 +823,24 @@ menuitem(1, "reverse strafe", function()
  reverse_strafe = not reverse_strafe
 end)
 
-menuitem(2, "debug", function()
+fisheye = 0
+function toggle_fisheye()
+ fisheye+= 1
+ local text
+ if (fisheye == 1) then
+  text = "[sqrt]"
+ elseif (fisheye == 2) then
+  text = "[full]"
+ else
+  fisheye = 0
+  text = "[none]"
+ end
+
+ menuitem(2, "fisheye "..text, toggle_fisheye)
+end
+toggle_fisheye()
+
+menuitem(3, "debug", function()
  if debug then
   debug = false
  else

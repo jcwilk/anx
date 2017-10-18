@@ -173,7 +173,24 @@ menuitem(1, "reverse strafe", function()
   reverse_strafe = not reverse_strafe
 end)
 
-menuitem(2, "debug", function()
+fisheye = 0
+function toggle_fisheye()
+  fisheye+= 1
+  local text
+  if (fisheye == 1) then
+    text = "[sqrt]"
+  elseif (fisheye == 2) then
+    text = "[full]"
+  else
+    fisheye = 0
+    text = "[none]"
+  end
+
+  menuitem(2, "fisheye "..text, toggle_fisheye)
+end
+toggle_fisheye()
+
+menuitem(3, "debug", function()
   if debug then
     debug = false
   else
