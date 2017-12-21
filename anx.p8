@@ -858,7 +858,7 @@ function tick_walking()
 end
 
 function recalc_settings()
- -- https://www.desmos.com/calculator/pw8n3n8rwf
+ -- https://www.desmos.com/calculator/pfberbcv2c
  local downscale_anxiety = .4 --sliding scale for how intense to make it
  local anxiety_factor = -2/(-current_anxiety*downscale_anxiety-2)
  fisheye_ratio = (1 - anxiety_factor) * 4
