@@ -7,6 +7,10 @@ height_ratio=.6
 distance_from_player_cutoff=.4
 mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
 height_scale=20 -- multiplier for something at distance of one after dividing by field of view
+orig_turn_amount=.01
+turn_amount=orig_turn_amount
+orig_speed = .1
+speed = orig_speed
 
 function set_skybox(sprite_id)
   sky_color=sget(8*(sprite_id%16),8*flr(sprite_id/16))
@@ -231,6 +235,8 @@ function recalc_settings()
   --field_of_view = orig_field_of_view / anxiety_factor
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
   draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
+  turn_amount = orig_turn_amount * (2 - anxiety_factor)
+  speed = orig_speed * (2 - anxiety_factor)
 end
 
 function nudge_player(angle)
@@ -253,11 +259,11 @@ function _update()
   changed_position=false
   if btn(0) then
     changed_position=true
-    player.bearing-=0.01
+    player.bearing-=turn_amount
   end
   if btn(1) then
     changed_position=true
-    player.bearing+=0.01
+    player.bearing+=turn_amount
   end
   if btn(2) then
     offset+=facing
@@ -278,7 +284,7 @@ function _update()
     changed_position=true
   end
 
-  player:apply_movement(offset*0.1)
+  player:apply_movement(offset*speed)
 
   local curr_tile_sprite_id=mget(round(player.coords.x),round(-player.coords.y))
   if is_sprite_door(curr_tile_sprite_id) then
