@@ -301,6 +301,49 @@ function calc_screen_dist_to_xy(x,y)
  return fisheye_coefficient
 end
 
+fog_swirl_offset=0
+fog_swirl_limit=10
+fog_swirl_tilt=.5
+function deferred_fog_draw(intx,inty,pixel_col,draw_width)
+ local sprites_tall= 2
+
+ local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
+
+ local sprite_height=calc_screen_dist_to_xy(intx,inty)*height_scale/distance/field_of_view
+ local height=sprites_tall*sprite_height
+ local screeny=64+2*sprite_height*height_ratio-height
+
+ local pixel_height=height/sprites_tall/8
+ local screenxright=screenx+draw_width-1
+
+ return {
+  distance=distance,
+  draw=function()
+   local pixel_color, color_mod, offset_check, check_col
+
+   for pixel_row=0,flr(pixel_height*16-1) do
+    color_mod = flr(screenx) + flr(screeny)+pixel_row
+    if (intx + inty + pixel_row / pixel_height / fog_swirl_tilt + fog_swirl_offset) % fog_swirl_limit >= 1/fog_swirl_tilt and color_mod % 2 < 1 then
+     pixel_color = ground_color
+    else
+     pixel_color = sky_color
+    end
+    line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,pixel_color)
+   end
+  end
+ }
+end
+
+fog_swirl_adjustment=0
+function update_fog_swirl()
+ fog_swirl_adjustment+= (rnd()-.5)/100
+ fog_swirl_adjustment = mid(-.1,fog_swirl_adjustment,.1)
+ fog_swirl_offset+= fog_swirl_adjustment
+ if fog_swirl_offset > fog_swirl_limit then
+  fog_swirl_offset -= fog_swirl_limit
+ end
+end
+
 function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
  cache_sprite(sprite_id)
 
@@ -715,7 +758,7 @@ function raycast_walls()
   deferred_draws=make_pool()
   found_mobs={}
 
-  while not found and count <= draw_distance do
+  while not found do
    count+=1
    reversed=false
    if not slope then
@@ -745,37 +788,50 @@ function raycast_walls()
     end
    end
 
-   sprite_id=mget(currx,-curry)
-   if is_sprite_wall(sprite_id) then
-    if not is_sprite_wall_transparent(sprite_id) then
-     found=true
+   if (count > draw_distance) then
+    found=true
+    pixel_col=flr(((intx+inty)%1)*8)
+    if reversed then
+     pixel_col=7-pixel_col
     end
-
-    if found or not last_tile_occupied or (last_tile_occupied != sprite_id and is_sprite_wall_transparent(sprite_id)) then
-     pixel_col=flr(((intx+inty)%1)*8)
-     if reversed then
-      pixel_col=7-pixel_col
-     end
-     new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
-     if new_draw then
-      deferred_draws.make(new_draw)
-     end
+    new_draw=deferred_fog_draw(intx,inty,pixel_col,draw_width)
+    if new_draw then
+     deferred_draws.make(new_draw)
     end
-    last_tile_occupied=sprite_id
    else
-    if need_new_skybox and is_sprite_skybox(sprite_id) then
-     need_new_skybox=false
-     set_skybox(sprite_id)
-    end
-    last_tile_occupied=false
-   end
-   if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
-    for mobi in all(mob_pos_map[currx][curry]) do
-     if not found_mobs[mobi.id] then
-      new_draw=mobi:deferred_draw(pv,screenx,draw_width)
+
+    sprite_id=mget(currx,-curry)
+    if is_sprite_wall(sprite_id) then
+     if not is_sprite_wall_transparent(sprite_id) then
+      found=true
+     end
+
+     if found or not last_tile_occupied or (last_tile_occupied != sprite_id and is_sprite_wall_transparent(sprite_id)) then
+      pixel_col=flr(((intx+inty)%1)*8)
+      if reversed then
+       pixel_col=7-pixel_col
+      end
+      new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
       if new_draw then
-       found_mobs[mobi.id]=true
        deferred_draws.make(new_draw)
+      end
+     end
+     last_tile_occupied=sprite_id
+    else
+     if need_new_skybox and is_sprite_skybox(sprite_id) then
+      need_new_skybox=false
+      set_skybox(sprite_id)
+     end
+     last_tile_occupied=false
+    end
+    if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
+     for mobi in all(mob_pos_map[currx][curry]) do
+      if not found_mobs[mobi.id] then
+       new_draw=mobi:deferred_draw(pv,screenx,draw_width)
+       if new_draw then
+        found_mobs[mobi.id]=true
+        deferred_draws.make(new_draw)
+       end
       end
      end
     end
@@ -928,6 +984,8 @@ function _update()
  mobile_pool:each(function(m)
   m:update()
  end)
+
+ update_fog_swirl()
 end
 
 function draw_stars()
@@ -950,14 +1008,6 @@ function draw_background()
  rectfill(0,0,127,63,sky_color)
  rectfill(0,64,127,127,ground_color)
  draw_stars()
- local fog_height=height_scale*2/(draw_distance-1)/field_of_view
- local fog_bottom=64-fog_height*(1-height_ratio)
- rectfill(0,fog_bottom,127,fog_bottom+fog_height,ground_color)
- for i=0,127 do
-  for j=fog_bottom,fog_bottom+fog_height-1,2 do
-   pset(i,j+i%2,sky_color)
-  end
- end
 end
 
 mob_pos_map={}

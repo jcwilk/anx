@@ -68,7 +68,7 @@ function raycast_walls()
     deferred_draws=make_pool()
     found_mobs={}
 
-    while not found and count <= draw_distance do
+    while not found do
       count+=1
       reversed=false
       if not slope then
@@ -98,37 +98,50 @@ function raycast_walls()
         end
       end
 
-      sprite_id=mget(currx,-curry)
-      if is_sprite_wall(sprite_id) then
-        if not is_sprite_wall_transparent(sprite_id) then
-          found=true
+      if (count > draw_distance) then
+        found=true
+        pixel_col=flr(((intx+inty)%1)*8)
+        if reversed then
+          pixel_col=7-pixel_col
         end
-
-        if found or not last_tile_occupied or (last_tile_occupied != sprite_id and is_sprite_wall_transparent(sprite_id)) then
-          pixel_col=flr(((intx+inty)%1)*8)
-          if reversed then
-            pixel_col=7-pixel_col
-          end
-          new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
-          if new_draw then
-            deferred_draws.make(new_draw)
-          end
+        new_draw=deferred_fog_draw(intx,inty,pixel_col,draw_width)
+        if new_draw then
+          deferred_draws.make(new_draw)
         end
-        last_tile_occupied=sprite_id
       else
-        if need_new_skybox and is_sprite_skybox(sprite_id) then
-          need_new_skybox=false
-          set_skybox(sprite_id)
-        end
-        last_tile_occupied=false
-      end
-      if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
-        for mobi in all(mob_pos_map[currx][curry]) do
-          if not found_mobs[mobi.id] then
-            new_draw=mobi:deferred_draw(pv,screenx,draw_width)
+
+        sprite_id=mget(currx,-curry)
+        if is_sprite_wall(sprite_id) then
+          if not is_sprite_wall_transparent(sprite_id) then
+            found=true
+          end
+
+          if found or not last_tile_occupied or (last_tile_occupied != sprite_id and is_sprite_wall_transparent(sprite_id)) then
+            pixel_col=flr(((intx+inty)%1)*8)
+            if reversed then
+              pixel_col=7-pixel_col
+            end
+            new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
             if new_draw then
-              found_mobs[mobi.id]=true
               deferred_draws.make(new_draw)
+            end
+          end
+          last_tile_occupied=sprite_id
+        else
+          if need_new_skybox and is_sprite_skybox(sprite_id) then
+            need_new_skybox=false
+            set_skybox(sprite_id)
+          end
+          last_tile_occupied=false
+        end
+        if not found and mob_pos_map[currx] and mob_pos_map[currx][curry] then
+          for mobi in all(mob_pos_map[currx][curry]) do
+            if not found_mobs[mobi.id] then
+              new_draw=mobi:deferred_draw(pv,screenx,draw_width)
+              if new_draw then
+                found_mobs[mobi.id]=true
+                deferred_draws.make(new_draw)
+              end
             end
           end
         end
@@ -281,6 +294,8 @@ function _update()
   mobile_pool:each(function(m)
     m:update()
   end)
+
+  update_fog_swirl()
 end
 
 function draw_stars()
@@ -303,14 +318,6 @@ function draw_background()
   rectfill(0,0,127,63,sky_color)
   rectfill(0,64,127,127,ground_color)
   draw_stars()
-  local fog_height=height_scale*2/(draw_distance-1)/field_of_view
-  local fog_bottom=64-fog_height*(1-height_ratio)
-  rectfill(0,fog_bottom,127,fog_bottom+fog_height,ground_color)
-  for i=0,127 do
-    for j=fog_bottom,fog_bottom+fog_height-1,2 do
-      pset(i,j+i%2,sky_color)
-    end
-  end
 end
 
 mob_pos_map={}
