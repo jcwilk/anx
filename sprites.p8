@@ -304,7 +304,7 @@ end
 fog_swirl_offset=0
 fog_swirl_limit=10
 fog_swirl_tilt=.5
-function deferred_fog_draw(intx,inty,pixel_col,draw_width)
+function deferred_fog_draw(intx,inty,draw_width)
   local sprites_tall= 2
 
   local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)

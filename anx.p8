@@ -304,7 +304,7 @@ end
 fog_swirl_offset=0
 fog_swirl_limit=10
 fog_swirl_tilt=.5
-function deferred_fog_draw(intx,inty,pixel_col,draw_width)
+function deferred_fog_draw(intx,inty,draw_width)
  local sprites_tall= 2
 
  local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
@@ -691,7 +691,7 @@ end)()
 -- start ext ./main.lua
 orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
-orig_draw_distance=12
+orig_draw_distance=8
 draw_distance=orig_draw_distance
 height_ratio=.6
 distance_from_player_cutoff=.4
@@ -713,7 +713,7 @@ function raycast_walls()
  local pv
  local slope
  local seenwalls={}
- local currx,curry,nextx,found,xdiff,ydiff,sprite_id,testy,testx,intx,inty
+ local currx,curry,found,xdiff,ydiff,sprite_id,intx,inty,distance_per_x,distance_per_y,xstep,ystep,distance
  wall_pool=make_pool()
  screenx=0
  buffer_percent=.1
@@ -747,58 +747,50 @@ function raycast_walls()
 
   pv=screenx_to_angle(screenx+(draw_width-1)/2):tovector()
 
-  xdiff=towinf(pv.x)
-  ydiff=towinf(pv.y)
-  if abs(pv.x) < .001 then
-   slope = false
-  else
-   slope=pv.y/pv.x
-   slope_y_correction=player.coords.y-slope*player.coords.x
-  end
+  deferred_draws=make_pool()
+  found_mobs={}
   currx=round(player.coords.x)
   curry=round(player.coords.y)
   found=false
-  count=1
-  deferred_draws=make_pool()
-  found_mobs={}
+  distance_per_x = 1/pv.x
+  distance_per_y = 1/pv.y
+  xstep = towinf(pv.x)
+  ystep = towinf(pv.y)
+
+  if abs(pv.x) > abs(pv.y) then
+   intx= currx + xstep/2
+   distance = (intx - player.coords.x) / pv.x
+   inty= player.coords.y + distance * pv.y
+   currx+= xstep
+  else
+   inty= curry - ystep/2
+   distance = (inty - player.coords.y) / pv.y
+   intx= player.coords.x + distance * pv.x
+   curry+= ystep
+  end
 
   while not found do
-   count+=1
-   reversed=false
-   if not slope then
-    curry+=ydiff
-    intx=player.coords.x
-    inty=curry-ydiff/2
-    if ydiff<0 then
-     reversed=true
-    end
+   if (currx + xstep/2 - intx) * distance_per_x < (curry + ystep/2 - inty) * distance_per_y then
+    intx= currx + xstep/2
+    distance = (intx - player.coords.x) / pv.x
+    inty= player.coords.y + distance * pv.y
+    currx+= xstep
+    reversed=xstep<0
    else
-    nextx=currx+xdiff
-    testy=slope*(nextx-xdiff/2)+slope_y_correction
-    if round(testy) == curry then
-     currx=nextx
-     intx=currx-xdiff/2
-     inty=testy
-     if xdiff>0 then
-      reversed=true
-     end
-    else
-     curry+=ydiff
-     intx=(curry-ydiff/2-slope_y_correction)/slope
-     inty=curry-ydiff/2
-     if ydiff<0 then
-      reversed=true
-     end
-    end
+    inty= curry + ystep/2
+    distance = (inty - player.coords.y) / pv.y
+    intx= player.coords.x + distance * pv.x
+    curry+= ystep
+    reversed=ystep<0
    end
 
-   if (count > draw_distance) then
+   if (distance > draw_distance) then
     found=true
     pixel_col=flr(((intx+inty)%1)*8)
     if reversed then
      pixel_col=7-pixel_col
     end
-    new_draw=deferred_fog_draw(intx,inty,pixel_col,draw_width)
+    new_draw=deferred_fog_draw(player.coords.x+draw_distance*pv.x,player.coords.y+draw_distance*pv.y,draw_width)
     if new_draw then
      deferred_draws.make(new_draw)
     end
