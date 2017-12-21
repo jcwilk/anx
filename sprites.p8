@@ -293,15 +293,12 @@ function cache_sprite(sprite_id)
   end
 end
 
+fisheye_ratio = 0.0
 -- this assumes a distance to the screen of 1 since it cancels out anyways
 function calc_screen_dist_to_xy(x,y)
-  if (fisheye == 0) then
-    return 1 / sin(atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val)
-  elseif (fisheye == 1) then
-    return 1 / sqrt(sin(atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val))
-  else
-    return 1
-  end
+  local fisheye_coefficient = 1 / sin(atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val)
+  fisheye_coefficient += (1 - fisheye_coefficient) * fisheye_ratio
+  return fisheye_coefficient
 end
 
 function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)

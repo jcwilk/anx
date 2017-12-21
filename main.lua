@@ -1,7 +1,8 @@
 -- START LIB
 orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
-draw_distance=12
+orig_draw_distance=12
+draw_distance=orig_draw_distance
 height_ratio=.6
 distance_from_player_cutoff=.4
 mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
@@ -173,23 +174,6 @@ menuitem(1, "reverse strafe", function()
   reverse_strafe = not reverse_strafe
 end)
 
-fisheye = 0
-function toggle_fisheye()
-  fisheye+= 1
-  local text
-  if (fisheye == 1) then
-    text = "[sqrt]"
-  elseif (fisheye == 2) then
-    text = "[full]"
-  else
-    fisheye = 0
-    text = "[none]"
-  end
-
-  menuitem(2, "fisheye "..text, toggle_fisheye)
-end
-toggle_fisheye()
-
 menuitem(3, "debug", function()
   if debug then
     debug = false
@@ -199,7 +183,13 @@ menuitem(3, "debug", function()
 end)
 
 current_anxiety=0
+anxiety_recover_cooldown=0
 function tick_anxiety()
+  if anxiety_recover_cooldown > 0 then
+    anxiety_recover_cooldown -= 1/30
+    return
+  end
+
   if current_anxiety >= 0 then
     current_anxiety-=.05+.005*current_anxiety
     if current_anxiety < 0 then current_anxiety=0 end
@@ -222,17 +212,21 @@ end
 
 function recalc_settings()
   -- https://www.desmos.com/calculator/pw8n3n8rwf
-  local anxiety_factor = -1/(-.4*current_anxiety-2)+.5
-  field_of_view = orig_field_of_view*anxiety_factor
+  local downscale_anxiety = .4 --sliding scale for how intense to make it
+  local anxiety_factor = -2/(-current_anxiety*downscale_anxiety-2)
+  fisheye_ratio = (1 - anxiety_factor) * 4
+  --field_of_view = orig_field_of_view / anxiety_factor
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
+  draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
 end
 
 function nudge_player(angle)
-  player_bearing_v+=angle/30+tounit(angle)/100
+  --player_bearing_v+=angle/30+tounit(angle)/100
 end
 
 function add_anxiety(angle)
   current_anxiety+=3
+  anxiety_recover_cooldown = 3
   nudge_player(angle)
 end
 
