@@ -68,15 +68,13 @@ function raycast_walls()
     drawn_fog=false
 
     if abs(pv.x) > abs(pv.y) then
-      intx= currx + xstep/2
+      intx= currx - xstep/2
       distance = (intx - player.coords.x) / pv.x
       inty= player.coords.y + distance * pv.y
-      currx+= xstep
     else
       inty= curry - ystep/2
       distance = (inty - player.coords.y) / pv.y
       intx= player.coords.x + distance * pv.x
-      curry+= ystep
     end
 
     while not found do
