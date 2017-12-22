@@ -301,34 +301,35 @@ function calc_screen_dist_to_xy(x,y)
   return fisheye_coefficient
 end
 
+function calc_screen_dist_to_angle(angle)
+  local fisheye_coefficient = 1 / sin(3/4+angle.val-player.bearing.val)
+  fisheye_coefficient += (1 - fisheye_coefficient) * fisheye_ratio
+  return fisheye_coefficient
+end
+
 fog_swirl_offset=0
 fog_swirl_limit=10
-fog_swirl_tilt=.5
-function deferred_fog_draw(intx,inty,draw_width)
-  local sprites_tall= 2
-
-  local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
-
-  local sprite_height=calc_screen_dist_to_xy(intx,inty)*height_scale/distance/field_of_view
-  local height=sprites_tall*sprite_height
-  local screeny=64+2*sprite_height*height_ratio-height
-
-  local pixel_height=height/sprites_tall/8
+fog_swirl_tilt=.03
+function deferred_fog_draw(angle,distance,draw_width,bg_only)
+  local height=2*calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
+  local screeny=64+height*height_ratio-height
   local screenxright=screenx+draw_width-1
 
   return {
     distance=distance,
     draw=function()
-      local pixel_color, color_mod, offset_check, check_col
+      if bg_only then
+        rectfill(screenx,screeny,screenxright,screeny+height,ground_color)
+      else
+        local pixel_color, color_mod, offset_check, check_col
 
-      for pixel_row=0,flr(pixel_height*16-1) do
-        color_mod = flr(screenx) + flr(screeny)+pixel_row
-        if (intx + inty + pixel_row / pixel_height / fog_swirl_tilt + fog_swirl_offset) % fog_swirl_limit >= 1/fog_swirl_tilt and color_mod % 2 < 1 then
-          pixel_color = ground_color
-        else
-          pixel_color = sky_color
+        for pixel_row=0,flr(height-1) do
+          color_mod = flr(screenx) + flr(screeny) + pixel_row
+          if (pixel_row / height + (angle.val % 1) * 100 + fog_swirl_offset/4) % .5 >= .05 and color_mod % 2 < 1 then
+          else
+            line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,sky_color)
+          end
         end
-        line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,pixel_color)
       end
     end
   }
@@ -344,17 +345,15 @@ function update_fog_swirl()
   end
 end
 
-function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
-  cache_sprite(sprite_id)
-
-  local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
-
-  local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
+function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width)
   if distance < distance_from_player_cutoff then
     return
   end
 
-  local sprite_height=calc_screen_dist_to_xy(intx,inty)*height_scale/distance/field_of_view
+  cache_sprite(sprite_id)
+
+  local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
+  local sprite_height=calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
   local height=sprites_tall*sprite_height
   local screeny=64+2*sprite_height*height_ratio-height
 

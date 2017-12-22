@@ -23,7 +23,7 @@ function raycast_walls()
   local pv
   local slope
   local seenwalls={}
-  local currx,curry,found,xdiff,ydiff,sprite_id,intx,inty,distance_per_x,distance_per_y,xstep,ystep,distance
+  local currx,curry,found,xdiff,ydiff,sprite_id,intx,inty,xstep,ystep,distance,drawn_fog
   wall_pool=make_pool()
   screenx=0
   buffer_percent=.1
@@ -55,17 +55,17 @@ function raycast_walls()
 
     last_tile_occupied=false
 
-    pv=screenx_to_angle(screenx+(draw_width-1)/2):tovector()
+    pa=screenx_to_angle(screenx+(draw_width-1)/2)
+    pv=pa:tovector()
 
     deferred_draws=make_pool()
     found_mobs={}
     currx=round(player.coords.x)
     curry=round(player.coords.y)
     found=false
-    distance_per_x = 1/pv.x
-    distance_per_y = 1/pv.y
     xstep = towinf(pv.x)
     ystep = towinf(pv.y)
+    drawn_fog=false
 
     if abs(pv.x) > abs(pv.y) then
       intx= currx + xstep/2
@@ -80,7 +80,7 @@ function raycast_walls()
     end
 
     while not found do
-      if (currx + xstep/2 - intx) * distance_per_x < (curry + ystep/2 - inty) * distance_per_y then
+      if (currx + xstep/2 - intx) / pv.x < (curry + ystep/2 - inty) / pv.y then
         intx= currx + xstep/2
         distance = (intx - player.coords.x) / pv.x
         inty= player.coords.y + distance * pv.y
@@ -94,18 +94,20 @@ function raycast_walls()
         reversed=ystep<0
       end
 
+      if distance > draw_distance * .9 and not drawn_fog then
+        new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width)
+        if new_draw then
+          deferred_draws.make(new_draw)
+        end
+      end
+
       if (distance > draw_distance) then
         found=true
-        pixel_col=flr(((intx+inty)%1)*8)
-        if reversed then
-          pixel_col=7-pixel_col
-        end
-        new_draw=deferred_fog_draw(player.coords.x+draw_distance*pv.x,player.coords.y+draw_distance*pv.y,draw_width)
+        new_draw=deferred_fog_draw(pa,draw_distance,draw_width,true)
         if new_draw then
           deferred_draws.make(new_draw)
         end
       else
-
         sprite_id=mget(currx,-curry)
         if is_sprite_wall(sprite_id) then
           if not is_sprite_wall_transparent(sprite_id) then
@@ -117,7 +119,7 @@ function raycast_walls()
             if reversed then
               pixel_col=7-pixel_col
             end
-            new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
+            new_draw=deferred_wall_draw(pa,distance,sprite_id,pixel_col,draw_width)
             if new_draw then
               deferred_draws.make(new_draw)
             end

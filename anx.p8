@@ -301,34 +301,35 @@ function calc_screen_dist_to_xy(x,y)
  return fisheye_coefficient
 end
 
+function calc_screen_dist_to_angle(angle)
+ local fisheye_coefficient = 1 / sin(3/4+angle.val-player.bearing.val)
+ fisheye_coefficient += (1 - fisheye_coefficient) * fisheye_ratio
+ return fisheye_coefficient
+end
+
 fog_swirl_offset=0
 fog_swirl_limit=10
-fog_swirl_tilt=.5
-function deferred_fog_draw(intx,inty,draw_width)
- local sprites_tall= 2
-
- local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
-
- local sprite_height=calc_screen_dist_to_xy(intx,inty)*height_scale/distance/field_of_view
- local height=sprites_tall*sprite_height
- local screeny=64+2*sprite_height*height_ratio-height
-
- local pixel_height=height/sprites_tall/8
+fog_swirl_tilt=.03
+function deferred_fog_draw(angle,distance,draw_width,bg_only)
+ local height=2*calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
+ local screeny=64+height*height_ratio-height
  local screenxright=screenx+draw_width-1
 
  return {
   distance=distance,
   draw=function()
-   local pixel_color, color_mod, offset_check, check_col
+   if bg_only then
+    rectfill(screenx,screeny,screenxright,screeny+height,ground_color)
+   else
+    local pixel_color, color_mod, offset_check, check_col
 
-   for pixel_row=0,flr(pixel_height*16-1) do
-    color_mod = flr(screenx) + flr(screeny)+pixel_row
-    if (intx + inty + pixel_row / pixel_height / fog_swirl_tilt + fog_swirl_offset) % fog_swirl_limit >= 1/fog_swirl_tilt and color_mod % 2 < 1 then
-     pixel_color = ground_color
-    else
-     pixel_color = sky_color
+    for pixel_row=0,flr(height-1) do
+     color_mod = flr(screenx) + flr(screeny) + pixel_row
+     if (pixel_row / height + (angle.val % 1) * 100 + fog_swirl_offset/4) % .5 >= .05 and color_mod % 2 < 1 then
+     else
+      line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,sky_color)
+     end
     end
-    line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,pixel_color)
    end
   end
  }
@@ -344,17 +345,15 @@ function update_fog_swirl()
  end
 end
 
-function deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
- cache_sprite(sprite_id)
-
- local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
-
- local distance=sqrt((intx-player.coords.x)^2+(inty-player.coords.y)^2)
+function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width)
  if distance < distance_from_player_cutoff then
   return
  end
 
- local sprite_height=calc_screen_dist_to_xy(intx,inty)*height_scale/distance/field_of_view
+ cache_sprite(sprite_id)
+
+ local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
+ local sprite_height=calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
  local height=sprites_tall*sprite_height
  local screeny=64+2*sprite_height*height_ratio-height
 
@@ -713,7 +712,7 @@ function raycast_walls()
  local pv
  local slope
  local seenwalls={}
- local currx,curry,found,xdiff,ydiff,sprite_id,intx,inty,distance_per_x,distance_per_y,xstep,ystep,distance
+ local currx,curry,found,xdiff,ydiff,sprite_id,intx,inty,xstep,ystep,distance,drawn_fog
  wall_pool=make_pool()
  screenx=0
  buffer_percent=.1
@@ -745,17 +744,17 @@ function raycast_walls()
 
   last_tile_occupied=false
 
-  pv=screenx_to_angle(screenx+(draw_width-1)/2):tovector()
+  pa=screenx_to_angle(screenx+(draw_width-1)/2)
+  pv=pa:tovector()
 
   deferred_draws=make_pool()
   found_mobs={}
   currx=round(player.coords.x)
   curry=round(player.coords.y)
   found=false
-  distance_per_x = 1/pv.x
-  distance_per_y = 1/pv.y
   xstep = towinf(pv.x)
   ystep = towinf(pv.y)
+  drawn_fog=false
 
   if abs(pv.x) > abs(pv.y) then
    intx= currx + xstep/2
@@ -770,7 +769,7 @@ function raycast_walls()
   end
 
   while not found do
-   if (currx + xstep/2 - intx) * distance_per_x < (curry + ystep/2 - inty) * distance_per_y then
+   if (currx + xstep/2 - intx) / pv.x < (curry + ystep/2 - inty) / pv.y then
     intx= currx + xstep/2
     distance = (intx - player.coords.x) / pv.x
     inty= player.coords.y + distance * pv.y
@@ -784,18 +783,20 @@ function raycast_walls()
     reversed=ystep<0
    end
 
+   if distance > draw_distance * .9 and not drawn_fog then
+    new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width)
+    if new_draw then
+     deferred_draws.make(new_draw)
+    end
+   end
+
    if (distance > draw_distance) then
     found=true
-    pixel_col=flr(((intx+inty)%1)*8)
-    if reversed then
-     pixel_col=7-pixel_col
-    end
-    new_draw=deferred_fog_draw(player.coords.x+draw_distance*pv.x,player.coords.y+draw_distance*pv.y,draw_width)
+    new_draw=deferred_fog_draw(pa,draw_distance,draw_width,true)
     if new_draw then
      deferred_draws.make(new_draw)
     end
    else
-
     sprite_id=mget(currx,-curry)
     if is_sprite_wall(sprite_id) then
      if not is_sprite_wall_transparent(sprite_id) then
@@ -807,7 +808,7 @@ function raycast_walls()
       if reversed then
        pixel_col=7-pixel_col
       end
-      new_draw=deferred_wall_draw(intx,inty,sprite_id,pixel_col,draw_width)
+      new_draw=deferred_wall_draw(pa,distance,sprite_id,pixel_col,draw_width)
       if new_draw then
        deferred_draws.make(new_draw)
       end
