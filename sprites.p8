@@ -588,7 +588,7 @@ makemobile = (function()
     if m.talk_delay <= 0 then
       sfx(flr(rnd(4)))
       m.talk_delay=30+rnd(10)
-      add_anxiety(player:turn_towards(m))
+      add_anxiety()
     else
       m.talk_delay-=1
     end

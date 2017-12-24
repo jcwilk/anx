@@ -3,7 +3,8 @@ orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
 orig_draw_distance=8
 draw_distance=orig_draw_distance
-height_ratio=.6
+orig_height_ratio=.6
+height_ratio=orig_height_ratio
 distance_from_player_cutoff=.4
 mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
 height_scale=20 -- multiplier for something at distance of one after dividing by field of view
@@ -219,26 +220,28 @@ function tick_walking()
   if walking_step >= 1 then walking_step=0 end
 end
 
+visual_anxiety = current_anxiety
+max_anxiety_diff = .3
 function recalc_settings()
+  local anxiety_diff = current_anxiety - visual_anxiety
+  local max_diff = max(abs(anxiety_diff/10),max_anxiety_diff)
+  visual_anxiety+= mid(-max_anxiety_diff,anxiety_diff,max_anxiety_diff)
+
   -- https://www.desmos.com/calculator/pfberbcv2c
   local downscale_anxiety = .4 --sliding scale for how intense to make it
-  local anxiety_factor = -2/(-current_anxiety*downscale_anxiety-2)
+  local anxiety_factor = -2/(-visual_anxiety*downscale_anxiety-2)
   fisheye_ratio = (1 - anxiety_factor) * 4
   --field_of_view = orig_field_of_view / anxiety_factor
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
   draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
   turn_amount = orig_turn_amount * (2 - anxiety_factor)
+  height_ratio = orig_height_ratio * (.5 + anxiety_factor/2)
   speed = orig_speed * (2 - anxiety_factor)
 end
 
-function nudge_player(angle)
-  --player_bearing_v+=angle/30+tounit(angle)/100
-end
-
-function add_anxiety(angle)
+function add_anxiety()
   current_anxiety+=3
   anxiety_recover_cooldown = 3
-  nudge_player(angle)
 end
 
 function _update()
