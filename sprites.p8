@@ -247,6 +247,37 @@ end
 
 cached_sprites={}
 
+aomx = {}
+aomy = {}
+for ix=1,8 do
+  aomx[ix] = {}
+  aomy[ix] = {}
+  for iy=1,16 do
+    aomx[ix][iy] = 0
+    aomy[ix][iy] = 0
+  end
+end
+
+function wander_aom()
+  local max_wander_step = 1
+  for ix=1,8 do
+    for iy=1,16 do
+      ws = min(max_wander_step,max_screenx_offset/5)
+
+      if enable_anxiety_x_offset then
+        xw = (rnd() * 2 - 1) * ws
+        aomx[ix][iy] = mid(-max_screenx_offset,aomx[ix][iy]+xw,max_screenx_offset)
+      elseif abs(aomx[ix][iy]) > max_wander_step then
+        aomx[ix][iy] -= tounit(aomx[ix][iy]) * max_wander_step / 4
+      else
+        aomx[ix][iy] = 0
+      end
+      yw = (rnd() * 2 - 1) * ws
+      aomy[ix][iy] = mid(-max_screenx_offset,aomy[ix][iy]+yw,max_screenx_offset)
+    end
+  end
+end
+
 function is_sprite_wall(sprite_id)
   return sprite_id > 0 and not fget(sprite_id,7) and not fget(sprite_id,6)
 end
@@ -364,12 +395,14 @@ function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width)
   return {
     distance=distance,
     draw=function()
-      local pixel_color, offset_check, check_col
+      local pixel_color, offset_check, check_col, ox, oy
 
       for pixel_row=1,(sprites_tall*8) do
         pixel_color=pixel_column[pixel_row]
         if pixel_color > 0 then
-          rectfill(screenx,screeny+pixel_row*pixel_height-pixel_height,screenxright,screeny+pixel_row*pixel_height-1,pixel_color)
+          ox = aomx[pixel_col+1][pixel_row]
+          oy = aomy[pixel_col+1][pixel_row]
+          rectfill(ox+screenx,oy+screeny+pixel_row*pixel_height-pixel_height,ox+screenxright,oy+screeny+pixel_row*pixel_height-1,pixel_color)
         end
       end
     end
@@ -536,9 +569,11 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
       end
 
       local screenxright=screenx+draw_width-1
-      local side_i,side
+      local side_i,side,row
 
-      for row in all(mob_data.rows) do
+      --for row in all(mob_data.rows) do
+      for i=1,#mob_data.rows do
+        row=mob_data.rows[i]
         pixel=row.pixels[col_i]
         if not side_only and pixel > 0 then
           rectfill(screenx,row.yo,screenxright,row.yf,pixel)

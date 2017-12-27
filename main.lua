@@ -12,6 +12,7 @@ orig_turn_amount=.01
 turn_amount=orig_turn_amount
 orig_speed = .1
 speed = orig_speed
+max_anxiety = 40
 
 function set_skybox(sprite_id)
   sky_color=sget(8*(sprite_id%16),8*flr(sprite_id/16))
@@ -20,6 +21,7 @@ end
 
 start_time=0
 max_width=0
+max_screenx_offset=0
 function raycast_walls()
   local pv
   local slope
@@ -35,6 +37,9 @@ function raycast_walls()
   else
     alotted_time=(2-start_time)
   end
+  --temp
+  --alotted_time = 10-start_time
+  --
   local buffer_time=buffer_percent*alotted_time
   start_time+=buffer_time
   alotted_time-=buffer_time
@@ -168,7 +173,7 @@ end
 
 mobile_pool = make_pool()
 wall_pool = make_pool()
-player =makemobile(false,makevec2d(8,-30),makeangle(-1/4))
+player =makemobile(false,makevec2d(10.369,-33.525),makeangle(.6601))
 
 for x=0,127 do
   for y=0,63 do
@@ -184,6 +189,7 @@ menuitem(1, "reverse strafe", function()
   reverse_strafe = not reverse_strafe
 end)
 
+--debug=true
 menuitem(3, "debug", function()
   if debug then
     debug = false
@@ -199,6 +205,8 @@ function tick_anxiety()
     anxiety_recover_cooldown -= 1/30
     return
   end
+
+  is_panic_attack = false
 
   if current_anxiety >= 0 then
     current_anxiety-=.05+.005*current_anxiety
@@ -223,6 +231,16 @@ end
 visual_anxiety = current_anxiety
 max_anxiety_diff = .3
 function recalc_settings()
+  -- if current_anxiety == 0 and visual_anxiety == 0 then
+  --   if ran_one_last_time then
+  --     return
+  --   else
+  --     ran_one_last_time = true
+  --   end
+  -- else
+  --   ran_one_last_time = false
+  -- end
+
   local anxiety_diff = current_anxiety - visual_anxiety
   local max_diff = max(abs(anxiety_diff/10),max_anxiety_diff)
   visual_anxiety+= mid(-max_anxiety_diff,anxiety_diff,max_anxiety_diff)
@@ -230,17 +248,29 @@ function recalc_settings()
   -- https://www.desmos.com/calculator/pfberbcv2c
   local downscale_anxiety = .4 --sliding scale for how intense to make it
   local anxiety_factor = -2/(-visual_anxiety*downscale_anxiety-2)
-  fisheye_ratio = (1 - anxiety_factor) * 4
+  fisheye_ratio = (1 - anxiety_factor) * 3
   --field_of_view = orig_field_of_view / anxiety_factor
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
   draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
   turn_amount = orig_turn_amount * (2 - anxiety_factor)
-  height_ratio = orig_height_ratio * (.5 + anxiety_factor/2)
+  height_ratio = orig_height_ratio * (.8 + anxiety_factor*.2)
   speed = orig_speed * (2 - anxiety_factor)
+  if is_panic_attack then
+    enable_anxiety_x_offset = true
+    max_screenx_offset = 80
+  else
+    enable_anxiety_x_offset = false
+    max_screenx_offset = (1 - anxiety_factor)
+  end
+  wander_aom()
 end
 
 function add_anxiety()
   current_anxiety+=3
+  if current_anxiety >= max_anxiety then
+    current_anxiety = max_anxiety
+    is_panic_attack = true
+  end
   anxiety_recover_cooldown = 3
 end
 
@@ -321,6 +351,25 @@ function draw_background()
   draw_stars()
 end
 
+function draw_anxiety_bar()
+  rectfill(54,1,126,6,0)
+  rectfill(83,2,125,5,1)
+  if current_anxiety > 0 then
+    local anx_pixels = (125-83) / max_anxiety * current_anxiety
+    rectfill(83,2,min(83+anx_pixels,125),5,7)
+    local disp_pixels
+    if is_panic_attack then
+      disp_pixels = 125-83
+    else
+      disp_pixels = (125-83) / max_anxiety * visual_anxiety
+    end
+    rectfill(83,2,min(83+disp_pixels,125),5,8)
+    print("ANXIETY",55,1,6)
+  else
+    print("ANXIETY",55,1,5)
+  end
+end
+
 mob_pos_map={}
 sky_color=1
 ground_color=0
@@ -340,6 +389,9 @@ function _draw()
   end)
 
   raycast_walls()
+
+  draw_anxiety_bar()
+
   if debug then
     color(12)
     cursor(0,0)
