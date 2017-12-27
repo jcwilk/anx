@@ -258,22 +258,44 @@ for ix=1,8 do
   end
 end
 
+function minn(a,b)
+  if a < b then
+    return a
+  else
+    return b
+  end
+end
+
+is_running_wander=false
 function wander_aom()
-  local max_wander_step = 1
+  if max_screenx_offset == 0 then
+    if not is_running_wander then
+      return
+    else
+      for ix=1,8 do
+        for iy=1,16 do
+          aomx[ix][iy] = 0
+          aomy[ix][iy] = 0
+        end
+      end
+      is_running_wander=false
+      return
+    end
+  end
+  is_running_wander = true
+
+  if enable_anxiety_x_offset then
+    for ix=1,8 do
+      for iy=1,16 do
+        xw = (rnd()-.5)*max_screenx_offset*.1
+        aomx[ix][iy] = mid(-max_screenx_offset,xw + aomx[ix][iy],max_screenx_offset)
+      end
+    end
+  end
   for ix=1,8 do
     for iy=1,16 do
-      ws = min(max_wander_step,max_screenx_offset/5)
-
-      if enable_anxiety_x_offset then
-        xw = (rnd() * 2 - 1) * ws
-        aomx[ix][iy] = mid(-max_screenx_offset,aomx[ix][iy]+xw,max_screenx_offset)
-      elseif abs(aomx[ix][iy]) > max_wander_step then
-        aomx[ix][iy] -= tounit(aomx[ix][iy]) * max_wander_step / 4
-      else
-        aomx[ix][iy] = 0
-      end
-      yw = (rnd() * 2 - 1) * ws
-      aomy[ix][iy] = mid(-max_screenx_offset,aomy[ix][iy]+yw,max_screenx_offset)
+      yw = (rnd()-.5)*max_screenx_offset*.1
+      aomy[ix][iy] = mid(-max_screenx_offset,yw + aomy[ix][iy],max_screenx_offset)
     end
   end
 end
@@ -341,70 +363,69 @@ end
 fog_swirl_offset=0
 fog_swirl_limit=10
 fog_swirl_tilt=.03
-function deferred_fog_draw(angle,distance,draw_width,bg_only)
+fog_pattern=0
+function deferred_fog_draw(angle,distance,draw_width,screenx,bg_only)
   local height=2*calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
   local screeny=64+height*height_ratio-height
   local screenxright=screenx+draw_width-1
 
   return {
-    distance=distance,
+    key=-distance,
     draw=function()
       if bg_only then
         rectfill(screenx,screeny,screenxright,screeny+height,ground_color)
       else
-        local pixel_color, color_mod, offset_check, check_col
-
-        for pixel_row=0,flr(height-1) do
-          color_mod = flr(screenx) + flr(screeny) + pixel_row
-          if (pixel_row / height + (angle.val % 1) * 100 + fog_swirl_offset/4) % .5 >= .05 and color_mod % 2 < 1 then
-          else
-            line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,sky_color)
-          end
-        end
+        fillp(fog_pattern)
+        rectfill(screenx,screeny,screenxright,screeny+height,sky_color)
+        fillp()
       end
     end
   }
 end
 
-fog_swirl_adjustment=0
+base_pattern = 0b1011010100100101
+offset = 0
 function update_fog_swirl()
-  fog_swirl_adjustment+= (rnd()-.5)/100
-  fog_swirl_adjustment = mid(-.1,fog_swirl_adjustment,.1)
-  fog_swirl_offset+= fog_swirl_adjustment
-  if fog_swirl_offset > fog_swirl_limit then
-    fog_swirl_offset -= fog_swirl_limit
-  end
+  offset+=.21
+  offset=offset%16
+  offsetv=flr(offset+player.bearing.val*128/field_of_view)%16
+  fog_pattern = shl(base_pattern,offsetv)
+  fog_pattern = bor(fog_pattern,band(0b1111111111111111,lshr(base_pattern,16-offsetv)))
+  fog_pattern+= 0b0.1
 end
 
-function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width)
+function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screenx)
   if distance < distance_from_player_cutoff then
     return
   end
 
-  cache_sprite(sprite_id)
+  local sprites_tall
+  if is_sprite_half_height(sprite_id) then
+    sprites_tall = 1
+  else
+    sprites_tall = 2
+  end
 
-  local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
-  local sprite_height=calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
-  local height=sprites_tall*sprite_height
-  local screeny=64+2*sprite_height*height_ratio-height
-
-  local pixel_height=height/sprites_tall/8
+  local screenxleft=screenx
   local screenxright=screenx+draw_width-1
+  local hit_count=1
+  local fisheye_correction=calc_screen_dist_to_angle(angle)
 
-  local pixel_column=cached_sprites[sprite_id][pixel_col+1]
   return {
-    distance=distance,
-    draw=function()
-      local pixel_color, offset_check, check_col, ox, oy
+    key=-distance,
+    add_hit=function(obj,new_dist,screenx,draw_width)
+      obj.key = (obj.key*hit_count+-new_dist) / (hit_count+1)
+      hit_count+=1
+      screenxright=screenx+draw_width-1
+    end,
+    draw=function(obj)
+      --sspr sx sy sw sh dx dy [dw dh] [flip_x] [flip_y]
+      local sprite_height=fisheye_correction*height_scale/distance/field_of_view
+      local bottomy = round(63.5+sprite_height*2*height_ratio)
+      local topy = round(63.5-sprite_height*sprites_tall*(sprites_tall/2-height_ratio))
+      local height = bottomy-topy
 
-      for pixel_row=1,(sprites_tall*8) do
-        pixel_color=pixel_column[pixel_row]
-        if pixel_color > 0 then
-          ox = aomx[pixel_col+1][pixel_row]
-          oy = aomy[pixel_col+1][pixel_row]
-          rectfill(ox+screenx,oy+screeny+pixel_row*pixel_height-pixel_height,ox+screenxright,oy+screeny+pixel_row*pixel_height-1,pixel_color)
-        end
-      end
+      sspr((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8,1,sprites_tall*8,screenx,topy,screenxright-screenxleft+1,height)
     end
   }
 end
@@ -536,73 +557,31 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
   -- This is a bit hacky... but it's ok for now
   if not mob_data.draw then
     return {
-      distance=0,
+      key=0,
       draw=noop_f
     }
   end
 
   return {
-    distance=mob_data.distance,
+    key=-mob_data.distance,
     draw=function()
-      local pixel_col
-      local found=false
-      local column, pixel
-      local col_i=0
-      local side_only=false
-      while not found and col_i < #mob_data.columns do
-        col_i+=1
-        column=mob_data.columns[col_i]
-        if column.xo <= screenx then
-          if column.xf >= screenx then
-            found=true
+      local pixel,column
+      for row in all(mob_data.rows) do
+        if mob_data.side_length >= 1 then
+          for side in all(row.sides) do
+            rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
           end
-        elseif column.xo+mob_data.side_length <= screenx then
-          side_only=true
-          found=true
-        else
-          return
+        elseif mob_data.side_length <= -1 then
+          for i=#row.sides,1,-1 do
+            side=row.sides[i]
+            rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
+          end
         end
-      end
-
-      if not found then
-        side_only=true
-      end
-
-      local screenxright=screenx+draw_width-1
-      local side_i,side,row
-
-      --for row in all(mob_data.rows) do
-      for i=1,#mob_data.rows do
-        row=mob_data.rows[i]
-        pixel=row.pixels[col_i]
-        if not side_only and pixel > 0 then
-          rectfill(screenx,row.yo,screenxright,row.yf,pixel)
-        else
-          found=false
-          if mob_data.side_length <= 0 then
-            side_i=0
-            while not found and side_i < #row.sides do
-              side_i+=1
-              side=row.sides[side_i]
-              if side.xo <= screenx and side.xf >= screenx then
-                found=true
-                rectfill(screenx,row.yo,screenxright,row.yf,side.color)
-              elseif screenx < side.xo then
-                found=true
-              end
-            end
-          else
-            side_i=#row.sides
-            while not found and side_i > 0 do
-              side=row.sides[side_i]
-              if side.xo <= screenx and side.xf >= screenx then
-                found=true
-                rectfill(screenx,row.yo,screenxright,row.yf,side.color)
-              elseif screenx > side.xf then
-                found=true
-              end
-              side_i-=1
-            end
+        for i=1,#mob_data.columns do
+          pixel = row.pixels[i]
+          column = mob_data.columns[i]
+          if pixel > 0 then
+            rectfill(column.xo,row.yo,column.xf,row.yf,pixel)
           end
         end
       end

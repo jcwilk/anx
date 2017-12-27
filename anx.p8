@@ -258,22 +258,44 @@ for ix=1,8 do
  end
 end
 
+function minn(a,b)
+ if a < b then
+  return a
+ else
+  return b
+ end
+end
+
+is_running_wander=false
 function wander_aom()
- local max_wander_step = 1
+ if max_screenx_offset == 0 then
+  if not is_running_wander then
+   return
+  else
+   for ix=1,8 do
+    for iy=1,16 do
+     aomx[ix][iy] = 0
+     aomy[ix][iy] = 0
+    end
+   end
+   is_running_wander=false
+   return
+  end
+ end
+ is_running_wander = true
+
+ if enable_anxiety_x_offset then
+  for ix=1,8 do
+   for iy=1,16 do
+    xw = (rnd()-.5)*max_screenx_offset*.1
+    aomx[ix][iy] = mid(-max_screenx_offset,xw + aomx[ix][iy],max_screenx_offset)
+   end
+  end
+ end
  for ix=1,8 do
   for iy=1,16 do
-   ws = min(max_wander_step,max_screenx_offset/5)
-
-   if enable_anxiety_x_offset then
-    xw = (rnd() * 2 - 1) * ws
-    aomx[ix][iy] = mid(-max_screenx_offset,aomx[ix][iy]+xw,max_screenx_offset)
-   elseif abs(aomx[ix][iy]) > max_wander_step then
-    aomx[ix][iy] -= tounit(aomx[ix][iy]) * max_wander_step / 4
-   else
-    aomx[ix][iy] = 0
-   end
-   yw = (rnd() * 2 - 1) * ws
-   aomy[ix][iy] = mid(-max_screenx_offset,aomy[ix][iy]+yw,max_screenx_offset)
+   yw = (rnd()-.5)*max_screenx_offset*.1
+   aomy[ix][iy] = mid(-max_screenx_offset,yw + aomy[ix][iy],max_screenx_offset)
   end
  end
 end
@@ -341,70 +363,69 @@ end
 fog_swirl_offset=0
 fog_swirl_limit=10
 fog_swirl_tilt=.03
-function deferred_fog_draw(angle,distance,draw_width,bg_only)
+fog_pattern=0
+function deferred_fog_draw(angle,distance,draw_width,screenx,bg_only)
  local height=2*calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
  local screeny=64+height*height_ratio-height
  local screenxright=screenx+draw_width-1
 
  return {
-  distance=distance,
+  key=-distance,
   draw=function()
    if bg_only then
     rectfill(screenx,screeny,screenxright,screeny+height,ground_color)
    else
-    local pixel_color, color_mod, offset_check, check_col
-
-    for pixel_row=0,flr(height-1) do
-     color_mod = flr(screenx) + flr(screeny) + pixel_row
-     if (pixel_row / height + (angle.val % 1) * 100 + fog_swirl_offset/4) % .5 >= .05 and color_mod % 2 < 1 then
-     else
-      line(screenx,screeny+pixel_row,screenxright,screeny+pixel_row,sky_color)
-     end
-    end
+    fillp(fog_pattern)
+    rectfill(screenx,screeny,screenxright,screeny+height,sky_color)
+    fillp()
    end
   end
  }
 end
 
-fog_swirl_adjustment=0
+base_pattern = 0b1011010100100101
+offset = 0
 function update_fog_swirl()
- fog_swirl_adjustment+= (rnd()-.5)/100
- fog_swirl_adjustment = mid(-.1,fog_swirl_adjustment,.1)
- fog_swirl_offset+= fog_swirl_adjustment
- if fog_swirl_offset > fog_swirl_limit then
-  fog_swirl_offset -= fog_swirl_limit
- end
+ offset+=.21
+ offset=offset%16
+ offsetv=flr(offset+player.bearing.val*128/field_of_view)%16
+ fog_pattern = shl(base_pattern,offsetv)
+ fog_pattern = bor(fog_pattern,band(0b1111111111111111,lshr(base_pattern,16-offsetv)))
+ fog_pattern+= 0b0.1
 end
 
-function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width)
+function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screenx)
  if distance < distance_from_player_cutoff then
   return
  end
 
- cache_sprite(sprite_id)
+ local sprites_tall
+ if is_sprite_half_height(sprite_id) then
+  sprites_tall = 1
+ else
+  sprites_tall = 2
+ end
 
- local sprites_tall= #cached_sprites[sprite_id][1]/8 --just to check the height
- local sprite_height=calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
- local height=sprites_tall*sprite_height
- local screeny=64+2*sprite_height*height_ratio-height
-
- local pixel_height=height/sprites_tall/8
+ local screenxleft=screenx
  local screenxright=screenx+draw_width-1
+ local hit_count=1
+ local fisheye_correction=calc_screen_dist_to_angle(angle)
 
- local pixel_column=cached_sprites[sprite_id][pixel_col+1]
  return {
-  distance=distance,
-  draw=function()
-   local pixel_color, offset_check, check_col, ox, oy
+  key=-distance,
+  add_hit=function(obj,new_dist,screenx,draw_width)
+   obj.key = (obj.key*hit_count+-new_dist) / (hit_count+1)
+   hit_count+=1
+   screenxright=screenx+draw_width-1
+  end,
+  draw=function(obj)
+   --sspr sx sy sw sh dx dy [dw dh] [flip_x] [flip_y]
+   local sprite_height=fisheye_correction*height_scale/distance/field_of_view
+   local bottomy = round(63.5+sprite_height*2*height_ratio)
+   local topy = round(63.5-sprite_height*sprites_tall*(sprites_tall/2-height_ratio))
+   local height = bottomy-topy
 
-   for pixel_row=1,(sprites_tall*8) do
-    pixel_color=pixel_column[pixel_row]
-    if pixel_color > 0 then
-     ox = aomx[pixel_col+1][pixel_row]
-     oy = aomy[pixel_col+1][pixel_row]
-     rectfill(ox+screenx,oy+screeny+pixel_row*pixel_height-pixel_height,ox+screenxright,oy+screeny+pixel_row*pixel_height-1,pixel_color)
-    end
-   end
+   sspr((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8,1,sprites_tall*8,screenx,topy,screenxright-screenxleft+1,height)
   end
  }
 end
@@ -536,73 +557,31 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
  -- This is a bit hacky... but it's ok for now
  if not mob_data.draw then
   return {
-   distance=0,
+   key=0,
    draw=noop_f
   }
  end
 
  return {
-  distance=mob_data.distance,
+  key=-mob_data.distance,
   draw=function()
-   local pixel_col
-   local found=false
-   local column, pixel
-   local col_i=0
-   local side_only=false
-   while not found and col_i < #mob_data.columns do
-    col_i+=1
-    column=mob_data.columns[col_i]
-    if column.xo <= screenx then
-     if column.xf >= screenx then
-      found=true
+   local pixel,column
+   for row in all(mob_data.rows) do
+    if mob_data.side_length >= 1 then
+     for side in all(row.sides) do
+      rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
      end
-    elseif column.xo+mob_data.side_length <= screenx then
-     side_only=true
-     found=true
-    else
-     return
+    elseif mob_data.side_length <= -1 then
+     for i=#row.sides,1,-1 do
+      side=row.sides[i]
+      rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
+     end
     end
-   end
-
-   if not found then
-    side_only=true
-   end
-
-   local screenxright=screenx+draw_width-1
-   local side_i,side,row
-
-   --for row in all(mob_data.rows) do
-   for i=1,#mob_data.rows do
-    row=mob_data.rows[i]
-    pixel=row.pixels[col_i]
-    if not side_only and pixel > 0 then
-     rectfill(screenx,row.yo,screenxright,row.yf,pixel)
-    else
-     found=false
-     if mob_data.side_length <= 0 then
-      side_i=0
-      while not found and side_i < #row.sides do
-       side_i+=1
-       side=row.sides[side_i]
-       if side.xo <= screenx and side.xf >= screenx then
-        found=true
-        rectfill(screenx,row.yo,screenxright,row.yf,side.color)
-       elseif screenx < side.xo then
-        found=true
-       end
-      end
-     else
-      side_i=#row.sides
-      while not found and side_i > 0 do
-       side=row.sides[side_i]
-       if side.xo <= screenx and side.xf >= screenx then
-        found=true
-        rectfill(screenx,row.yo,screenxright,row.yf,side.color)
-       elseif screenx > side.xf then
-        found=true
-       end
-       side_i-=1
-      end
+    for i=1,#mob_data.columns do
+     pixel = row.pixels[i]
+     column = mob_data.columns[i]
+     if pixel > 0 then
+      rectfill(column.xo,row.yo,column.xf,row.yf,pixel)
      end
     end
    end
@@ -725,7 +704,7 @@ end)()
 -- start ext ./main.lua
 orig_field_of_view=1/6
 field_of_view=orig_field_of_view -- 45*
-orig_draw_distance=8
+orig_draw_distance=10
 draw_distance=orig_draw_distance
 orig_height_ratio=.6
 height_ratio=orig_height_ratio
@@ -738,14 +717,107 @@ orig_speed = .1
 speed = orig_speed
 max_anxiety = 40
 
+--debug stuff, disable for release
+force_draw_width=false
+skip_update=false
+skip_draw=false
+debug=false
+--
+
+function draw_debug()
+ color(12)
+ cursor(0,0)
+ print(stat(0))
+ print(draw_start_time)
+ print(presort_time)
+ print(predraw_time)
+ print(stat(1))
+ print(stat(7))
+ print("x"..player.coords.x.." y"..player.coords.y)
+ print(player.bearing.val)
+ print(1-skipped_columns/128)
+ print(largest_width)
+end
+
 function set_skybox(sprite_id)
  sky_color=sget(8*(sprite_id%16),8*flr(sprite_id/16))
  ground_color=sget(8*(sprite_id%16),8*flr(sprite_id/16)+4)
 end
 
-start_time=0
-max_width=0
+--borrowed with love from https://www.lexaloffle.com/bbs/?pid=40157#p40157
+function ce_heap_sort(data)
+local n = #data
+if n == 0 then
+ return
+end
+
+-- form a max heap
+for i = flr(n / 2) + 1, 1, -1 do
+ -- m is the index of the max child
+ local parent, value, m = i, data[i], i + i
+ local key = value.key
+
+ while m <= n do
+ -- find the max child
+ if ((m < n) and (data[m + 1].key > data[m].key)) m += 1
+ local mval = data[m]
+ if (key > mval.key) break
+ data[parent] = mval
+ parent = m
+ m += m
+ end
+ data[parent] = value
+end
+
+-- read out the values,
+-- restoring the heap property
+-- after each step
+for i = n, 2, -1 do
+ -- swap root with last
+ local value = data[i]
+ data[i], data[1] = data[1], value
+
+ -- restore the heap
+ local parent, terminate, m = 1, i - 1, 2
+ local key = value.key
+
+ while m <= terminate do
+ local mval = data[m]
+ local mkey = mval.key
+ if (m < terminate) and (data[m + 1].key > mkey) then
+  m += 1
+  mval = data[m]
+  mkey = mval.key
+ end
+ if (key > mkey) break
+ data[parent] = mval
+ parent = m
+ m += m
+ end
+
+ data[parent] = value
+end
+end
+
+function reset_wall_cache()
+ wall_cache={{},{}}
+end
+
+function cache_wall_col(x,y,face_index)
+ if not wall_cache[face_index][x] then
+  wall_cache[face_index][x] = {}
+ end
+
+ if not wall_cache[face_index][x][y] then
+  wall_cache[face_index][x][y] = {}
+ end
+
+ return wall_cache[face_index][x][y]
+end
+
+largest_width=0
 max_screenx_offset=0
+skipped_columns=0
 function raycast_walls()
  local pv
  local slope
@@ -753,34 +825,42 @@ function raycast_walls()
  local currx,curry,found,xdiff,ydiff,sprite_id,intx,inty,xstep,ystep,distance,drawn_fog
  wall_pool=make_pool()
  screenx=0
- buffer_percent=.1
- start_time=stat(1)
- local alotted_time
+ buffer_percent=.2
+ local start_time=draw_start_time
+
+ local total_time
  if changed_position then
-  alotted_time=(1-start_time)
+  total_time=1
  else
-  alotted_time=(2-start_time)
+  total_time=2
  end
- --temp
- --alotted_time = 10-start_time
- --
+ --total_time-=.25
+
+ local alotted_time=total_time-start_time
  local buffer_time=buffer_percent*alotted_time
  start_time+=buffer_time
  alotted_time-=buffer_time
 
- local skipped_columns=0
+ skipped_columns=0 --global for debug
  local found_mobs
- local new_draw, deferred_draws
+ local new_draw --, deferred_draws
  local draw_width
  local last_tile_occupied
- max_width=0
+ local this_wall_cache, face_index
+ largest_width=0
  clear_draw_cache()
+ reset_wall_cache()
+ deferred_draws={}
+ found_mobs={}
 
  while screenx<=127 do
-  behind_time=stat(1)-(start_time+screenx/127*alotted_time-buffer_time)
+  behind_time=stat(1)-(start_time+screenx/127*alotted_time-buffer_time-.002*#deferred_draws)
   draw_width=128*behind_time/alotted_time
   draw_width=flr(mid(1,8,draw_width))
-  max_width=max(max_width,draw_width)
+  if force_draw_width then
+   draw_width=force_draw_width
+  end
+  largest_width=max(largest_width,draw_width)
   skipped_columns+=draw_width-1
 
   last_tile_occupied=false
@@ -788,8 +868,6 @@ function raycast_walls()
   pa=screenx_to_angle(screenx+(draw_width-1)/2)
   pv=pa:tovector()
 
-  deferred_draws=make_pool()
-  found_mobs={}
   currx=round(player.coords.x)
   curry=round(player.coords.y)
   found=false
@@ -813,27 +891,30 @@ function raycast_walls()
     distance = (intx - player.coords.x) / pv.x
     inty= player.coords.y + distance * pv.y
     currx+= xstep
-    reversed=xstep<0
+    reversed=xstep>0
+    face_index=1
    else
     inty= curry + ystep/2
     distance = (inty - player.coords.y) / pv.y
     intx= player.coords.x + distance * pv.x
     curry+= ystep
     reversed=ystep<0
+    face_index=2
    end
 
-   if distance > draw_distance * .9 and not drawn_fog then
-    new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width)
+   if distance > draw_distance * .85 and not drawn_fog then
+    new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width,screenx)
     if new_draw then
-     deferred_draws.make(new_draw)
+     drawn_fog=true
+     add(deferred_draws,new_draw)
     end
    end
 
    if (distance > draw_distance) then
     found=true
-    new_draw=deferred_fog_draw(pa,draw_distance,draw_width,true)
+    new_draw=deferred_fog_draw(pa,draw_distance,draw_width,screenx,true)
     if new_draw then
-     deferred_draws.make(new_draw)
+     add(deferred_draws,new_draw)
     end
    else
     sprite_id=mget(currx,-curry)
@@ -847,9 +928,17 @@ function raycast_walls()
       if reversed then
        pixel_col=7-pixel_col
       end
-      new_draw=deferred_wall_draw(pa,distance,sprite_id,pixel_col,draw_width)
+
+      this_wall_cache = cache_wall_col(currx,curry,face_index)
+      new_draw = this_wall_cache[pixel_col]
       if new_draw then
-       deferred_draws.make(new_draw)
+       new_draw:add_hit(distance,screenx,draw_width)
+      else
+       new_draw=deferred_wall_draw(pa,distance,sprite_id,pixel_col,draw_width,screenx,draw_width)
+       if new_draw then
+        add(deferred_draws,new_draw)
+        this_wall_cache[pixel_col] = new_draw
+       end
       end
      end
      last_tile_occupied=sprite_id
@@ -866,7 +955,7 @@ function raycast_walls()
        new_draw=mobi:deferred_draw(pv,screenx,draw_width)
        if new_draw then
         found_mobs[mobi.id]=true
-        deferred_draws.make(new_draw)
+        add(deferred_draws,new_draw)
        end
       end
      end
@@ -874,24 +963,18 @@ function raycast_walls()
    end
   end
 
-  deferred_draws:sort_by(function(d)
-   return d.distance
-  end)
-
-  deferred_draws:each(function(d)
-   d.draw()
-  end)
-
   if debug and draw_width>1 then
    line(screenx+1,127,screenx+draw_width-1,127,8)
   end
 
   screenx+=draw_width
  end
- if debug then
-  color(12)
-  print(1-skipped_columns/128)
-  print(max_width)
+
+ presort_time=stat(1)
+ ce_heap_sort(deferred_draws)
+ predraw_time=stat(1)
+ for d in all(deferred_draws) do
+  d:draw()
  end
 end
 
@@ -986,7 +1069,11 @@ function recalc_settings()
   enable_anxiety_x_offset = false
   max_screenx_offset = (1 - anxiety_factor)
  end
- wander_aom()
+ if true then
+  return
+ end
+ --TODO
+ --wander_aom()
 end
 
 function add_anxiety()
@@ -999,6 +1086,9 @@ function add_anxiety()
 end
 
 function _update()
+ if skip_update then
+  return
+ end
  local offset = makevec2d(0,0)
  local facing = player.bearing:tovector()
  local right = makevec2d(facing.y,-facing.x)
@@ -1035,6 +1125,8 @@ function _update()
 
  player:apply_movement(offset*speed)
 
+
+
  local curr_tile_sprite_id=mget(round(player.coords.x),round(-player.coords.y))
  if is_sprite_door(curr_tile_sprite_id) then
   need_new_skybox=true
@@ -1042,10 +1134,16 @@ function _update()
   set_skybox(curr_tile_sprite_id)
  end
 
+
+
+
  tick_anxiety()
+
  tick_bearing_v()
+
  recalc_settings()
 
+ --USAGE ~.035
  mobile_pool:each(function(m)
   m:update()
  end)
@@ -1099,30 +1197,30 @@ sky_color=1
 ground_color=0
 fog_color=0
 function _draw()
- draw_background()
+ draw_start_time = stat(1)
+ if (skip_draw) then
+  cls()
+ else
+  draw_background()
 
- mob_pos_map={}
- mobile_pool:each(function(mob)
-  for x=flr(mob.coords.x),ceil(mob.coords.x) do
-   for y=flr(mob.coords.y),ceil(mob.coords.y) do
-    mob_pos_map[x] = mob_pos_map[x] or {}
-    mob_pos_map[x][y] = mob_pos_map[x][y] or {}
-    add(mob_pos_map[x][y],mob)
+  mob_pos_map={}
+  mobile_pool:each(function(mob)
+   for x=flr(mob.coords.x),ceil(mob.coords.x) do
+    for y=flr(mob.coords.y),ceil(mob.coords.y) do
+     mob_pos_map[x] = mob_pos_map[x] or {}
+     mob_pos_map[x][y] = mob_pos_map[x][y] or {}
+     add(mob_pos_map[x][y],mob)
+    end
    end
-  end
- end)
+  end)
 
- raycast_walls()
+  raycast_walls()
 
- draw_anxiety_bar()
+  draw_anxiety_bar()
+ end
 
  if debug then
-  color(12)
-  cursor(0,0)
-  print(start_time)
-  print(stat(1))
-  print("x"..player.coords.x.." y"..player.coords.y)
-  print(player.bearing.val)
+  draw_debug()
  end
 end
 -- end ext
