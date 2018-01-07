@@ -283,7 +283,13 @@ for x=0,127 do
   for y=0,63 do
     mob_id=mget(x,y)
     if is_sprite_mob(mob_id) then
-      mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
+      if mob_id == 17 then
+        mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
+      elseif mob_id == 16 then
+        mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
+      else
+        mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
+      end
     end
   end
 end
@@ -489,6 +495,29 @@ function draw_anxiety_bar()
   end
 end
 
+coin_count=0
+function add_coin()
+  coin_count+=1
+end
+
+function clear_coins()
+  coin_count=0
+end
+
+has_whisky=false
+function add_whisky()
+  has_whisky=true
+end
+
+function draw_inventory()
+  for i=0,coin_count do
+    spr(17,128-i*9,8)
+  end
+  if has_whisky then
+    spr(16,128-coin_count*9-8,8) -- -8 because the whisky is a little narrow
+  end
+end
+
 mob_pos_map={}
 sky_color=1
 ground_color=0
@@ -514,6 +543,8 @@ function _draw()
     raycast_walls()
 
     draw_anxiety_bar()
+
+    draw_inventory()
   end
 
   if debug then

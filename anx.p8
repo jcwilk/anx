@@ -671,10 +671,6 @@ makemobile = (function()
   end
  end
 
- local function spin(mob)
-  mob.bearing+=.01
- end
-
  return function(sprite_id,coords,bearing)
   mob_id_counter+=1
   local obj = {
@@ -688,13 +684,53 @@ makemobile = (function()
    talk=talk,
    apply_movement=apply_movement,
    entering_door=false,
-   hitbox_radius=mob_hitbox_radius
+   hitbox_radius=mob_hitbox_radius,
+   update=default_update
   }
-  if sprite_id == 17 or sprite_id == 16 then
-   obj.update=spin
-  else
-   obj.update=default_update
+  return obj
+ end
+end)()
+
+makeitem = (function()
+ local function item_update(mob)
+  mob.bearing+=.01
+  if (player.coords-mob.coords):diamond_distance() < .5 then
+   mob:on_pickup()
   end
+ end
+
+ return function(sprite_id,coords,bearing)
+  local obj=makemobile(sprite_id,coords,bearing)
+  obj.update=item_update
+  obj.on_pickup=noop_f
+  return obj
+ end
+end)()
+
+makecoin = (function()
+ local function pickup(mob)
+  mob:kill()
+  add_coin()
+ end
+
+ return function(sprite_id,coords,bearing)
+  local obj=makeitem(sprite_id,coords,bearing)
+  obj.on_pickup=pickup
+  return obj
+ end
+end)()
+
+makewhisky = (function()
+ local function pickup(mob)
+  if coin_count >= 5 then
+   mob:kill()
+   add_whisky()
+  end
+ end
+
+ return function(sprite_id,coords,bearing)
+  local obj=makeitem(sprite_id,coords,bearing)
+  obj.on_pickup=pickup
   return obj
  end
 end)()
@@ -986,7 +1022,13 @@ for x=0,127 do
  for y=0,63 do
   mob_id=mget(x,y)
   if is_sprite_mob(mob_id) then
-   mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
+   if mob_id == 17 then
+    mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
+   elseif mob_id == 16 then
+    mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
+   else
+    mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
+   end
   end
  end
 end
@@ -1192,6 +1234,29 @@ function draw_anxiety_bar()
  end
 end
 
+coin_count=0
+function add_coin()
+ coin_count+=1
+end
+
+function clear_coins()
+ coin_count=0
+end
+
+has_whisky=false
+function add_whisky()
+ has_whisky=true
+end
+
+function draw_inventory()
+ for i=0,coin_count do
+  spr(17,128-i*9,8)
+ end
+ if has_whisky then
+  spr(16,128-coin_count*9-8,8) -- -8 because the whisky is a little narrow
+ end
+end
+
 mob_pos_map={}
 sky_color=1
 ground_color=0
@@ -1217,6 +1282,8 @@ function _draw()
   raycast_walls()
 
   draw_anxiety_bar()
+
+  draw_inventory()
  end
 
  if debug then

@@ -671,10 +671,6 @@ makemobile = (function()
     end
   end
 
-  local function spin(mob)
-    mob.bearing+=.01
-  end
-
   return function(sprite_id,coords,bearing)
     mob_id_counter+=1
     local obj = {
@@ -688,13 +684,53 @@ makemobile = (function()
       talk=talk,
       apply_movement=apply_movement,
       entering_door=false,
-      hitbox_radius=mob_hitbox_radius
+      hitbox_radius=mob_hitbox_radius,
+      update=default_update
     }
-    if sprite_id == 17 or sprite_id == 16 then
-      obj.update=spin
-    else
-      obj.update=default_update
+    return obj
+  end
+end)()
+
+makeitem = (function()
+  local function item_update(mob)
+    mob.bearing+=.01
+    if (player.coords-mob.coords):diamond_distance() < .5 then
+      mob:on_pickup()
     end
+  end
+
+  return function(sprite_id,coords,bearing)
+    local obj=makemobile(sprite_id,coords,bearing)
+    obj.update=item_update
+    obj.on_pickup=noop_f
+    return obj
+  end
+end)()
+
+makecoin = (function()
+  local function pickup(mob)
+    mob:kill()
+    add_coin()
+  end
+
+  return function(sprite_id,coords,bearing)
+    local obj=makeitem(sprite_id,coords,bearing)
+    obj.on_pickup=pickup
+    return obj
+  end
+end)()
+
+makewhisky = (function()
+  local function pickup(mob)
+    if coin_count >= 5 then
+      mob:kill()
+      add_whisky()
+    end
+  end
+
+  return function(sprite_id,coords,bearing)
+    local obj=makeitem(sprite_id,coords,bearing)
+    obj.on_pickup=pickup
     return obj
   end
 end)()
