@@ -199,7 +199,7 @@ function raycast_walls()
         face_index=2
       end
 
-      if distance > draw_distance * .85 and not drawn_fog then
+      if distance > draw_distance * .9 and not drawn_fog then
         new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width,screenx)
         if new_draw then
           drawn_fog=true
@@ -287,6 +287,8 @@ for x=0,127 do
         mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
       elseif mob_id == 16 then
         mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
+      elseif mob_id == 41 then
+        mobile_pool.make(makeclerk(mob_id,makevec2d(x,-y),makeangle(rnd())))
       else
         mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
       end
@@ -452,6 +454,10 @@ function _update()
   end)
 
   update_fog_swirl()
+
+  update_inventory()
+
+  update_popup()
 end
 
 function draw_stars()
@@ -509,9 +515,82 @@ function add_whisky()
   has_whisky=true
 end
 
+making_payment=false
+function make_payment()
+  if has_whisky and coin_count > 0 then
+    popup("pAYING FOR WHISKY...",20,11)
+    making_payment = true
+  end
+end
+
+paid_for_whisky = false
+payment_progress = 0
+function update_inventory()
+  if making_payment then
+    payment_progress+=.005
+    if payment_progress >= 1 then
+      coin_count = 0
+      paid_for_whisky = true
+      payment_progress = 0
+      popup("whisky purchased!",60,11,true)
+    end
+  else
+    payment_progress = 0
+  end
+  making_payment = false
+end
+
+popup_duration = 0
+popup_text = ""
+popup_color = 8
+popup_blinking = false
+function popup(text,duration,colr,blinking)
+  popup_duration = duration
+  popup_text = text
+  popup_color = colr
+  popup_blinking = blinking
+end
+
+function update_popup()
+  if popup_duration > 0 then
+    popup_duration-=1
+  end
+end
+
+--popup border sizes
+pb1 = 7
+pb2 = 6
+pb3 = 4
+pb4 = 3
+function draw_popup()
+  if popup_duration > 0 then
+    local textxo = 64-#popup_text*4/2
+    local textxf = textxo + #popup_text*4 - 2
+    local textyo = 51
+    local textyf = 55
+    rect(textxo-pb1,textyo-pb1,textxf+pb1,textyf+pb1,ground_color)
+    fillp(0b0101101001011010)
+    rectfill(textxo-pb2,textyo-pb2,textxf+pb2,textyf+pb2,ground_color*16+sky_color)
+    fillp(0)
+    rect(textxo-pb3,textyo-pb3,textxf+pb3,textyf+pb3,sky_color)
+    rectfill(textxo-pb4,textyo-pb4,textxf+pb4,textyf+pb4,0)
+    if not popup_blinking or popup_duration % 10 < 9 then
+      print(popup_text,textxo,textyo,popup_color)
+    end
+  end
+end
+
 function draw_inventory()
-  for i=0,coin_count do
+  if payment_progress > 0 then
+    rectfill(83,8,83+ceil(43*payment_progress),15,11)
+  end
+  for i=1,coin_count do
     spr(17,128-i*9,8)
+  end
+  if payment_progress > 0 then
+    fillp(0b0101101001011010.1)
+    rectfill(83,8,83+ceil(43*payment_progress),15,11)
+    fillp(0)
   end
   if has_whisky then
     spr(16,128-coin_count*9-8,8) -- -8 because the whisky is a little narrow
@@ -545,6 +624,8 @@ function _draw()
     draw_anxiety_bar()
 
     draw_inventory()
+
+    draw_popup()
   end
 
   if debug then

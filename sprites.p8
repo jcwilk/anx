@@ -374,10 +374,10 @@ function deferred_fog_draw(angle,distance,draw_width,screenx,bg_only)
     key=-distance,
     draw=function()
       if bg_only then
-        rectfill(screenx,screeny,screenxright,screeny+height,ground_color)
+        rectfill(screenx,screeny,screenxright,screeny+height,0)
       else
         fillp(fog_pattern)
-        rectfill(screenx,screeny,screenxright,screeny+height,sky_color)
+        rectfill(screenx,screeny,screenxright,screeny+height,5)
         fillp()
       end
     end
@@ -501,8 +501,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local row,pixel,pixel_color
   local sides, side
 
-  local spritex=8*(mob.sprite_id%16)
-  local spritey=8*(mob.sprite_id/16)
+  local spritex=8*flr(mob.sprite_id%16)
+  local spritey=8*flr(mob.sprite_id/16)
 
   local total_rows=16
   if is_sprite_half_height(mob.sprite_id) then --hax for half height mobs
@@ -745,6 +745,25 @@ makewhisky = (function()
   return function(sprite_id,coords,bearing)
     local obj=makeitem(sprite_id,coords,bearing)
     obj.on_pickup=pickup
+    return obj
+  end
+end)()
+
+makeclerk = (function()
+  local function clerk_update(mob)
+    local m_to_p=mob.coords-player.coords
+    local distance=m_to_p:tomagnitude()
+    if distance < 2.2 then
+      if abs(mob:turn_towards(player)) < .1 then
+        mob:talk()
+        make_payment()
+      end
+    end
+  end
+
+  return function(sprite_id,coords,bearing)
+    local obj=makemobile(sprite_id,coords,bearing)
+    obj.update=clerk_update
     return obj
   end
 end)()
