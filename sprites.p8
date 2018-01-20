@@ -348,14 +348,19 @@ end
 
 fisheye_ratio = 0.0
 -- this assumes a distance to the screen of 1 since it cancels out anyways
-function calc_screen_dist_to_xy(x,y)
-  local fisheye_coefficient = 1 / sin(atan2(x-player.coords.x,y-player.coords.y)-player.bearing.val)
-  fisheye_coefficient += (1 - fisheye_coefficient) * fisheye_ratio
-  return fisheye_coefficient
-end
+function calc_fisheye_correction(angle)
+  local adjusted = (angle.val-player.bearing.val) % 1
+  --limit the correction to the edge of the screen
+  --otherwise it can make things off screen grow huge and stretch onto the screen
+  --this mainly happens with mobs
+  -- this check brings performance down (1.7558 -> 1.7706) but I think it's acceptable
+  if adjusted < .5 and adjusted > field_of_view/2 then
+    adjusted = field_of_view/2
+  elseif adjusted >= .5 and adjusted < 1-field_of_view/2 then
+    adjusted = 1-field_of_view/2
+  end
 
-function calc_screen_dist_to_angle(angle)
-  local fisheye_coefficient = 1 / sin(3/4+angle.val-player.bearing.val)
+  local fisheye_coefficient = 1 / sin(3/4+adjusted)
   fisheye_coefficient += (1 - fisheye_coefficient) * fisheye_ratio
   return fisheye_coefficient
 end
@@ -365,7 +370,7 @@ fog_swirl_limit=10
 fog_swirl_tilt=.03
 fog_pattern=0
 function deferred_fog_draw(angle,distance,draw_width,screenx,bg_only)
-  local height=2*calc_screen_dist_to_angle(angle)*height_scale/distance/field_of_view
+  local height=2*calc_fisheye_correction(angle)*height_scale/distance/field_of_view
   local screeny=64+height*height_ratio-height
   local screenxright=screenx+draw_width-1
 
@@ -409,7 +414,7 @@ function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screen
   local screenxleft=screenx
   local screenxright=screenx+draw_width-1
   local hit_count=1
-  local fisheye_correction=calc_screen_dist_to_angle(angle)
+  local fisheye_correction=calc_fisheye_correction(angle)
 
   return {
     key=-distance,
@@ -464,11 +469,13 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
 
   local side_to_left=side_length*face_length<0
 
-  local height=2*calc_screen_dist_to_xy(mob.coords.x,mob.coords.y)*height_scale/distance/field_of_view
+  local angle_to_mob = vec_to_mob:tobearing()
+
+  local height=2*calc_fisheye_correction(angle_to_mob)*height_scale/distance/field_of_view
   local screen_width=abs(face_length)*height/2
   local screen_side=abs(side_length)*height/2
 
-  local screenx_mob=angle_to_screenx(vec_to_mob:tobearing())
+  local screenx_mob=angle_to_screenx(angle_to_mob)
   if side_to_left then
     screenx_mob+=screen_side/2
   else
@@ -545,6 +552,10 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
     distance=distance,
     draw=true
   }
+
+  if screen_width < 1 then -- we can only see the side so skip listing the columns
+    mob_data.columns={}
+  end
 
   cached_mobs[mob.id]=mob_data
 
