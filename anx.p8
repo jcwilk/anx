@@ -5,10 +5,6 @@ __lua__
 --by john wilkinson
 
 -- start ext ./utils.lua
-function ceil(n)
- return -flr(-n)
-end
-
 function trunc(n)
  return flr(n)
 end
@@ -231,7 +227,7 @@ makeangle = (function()
 end)()
 
 function angle_to_screenx(angle)
- local offset_from_center_of_screen = -sin((angle-player.bearing).val)
+ local offset_from_center_of_screen = -sin(angle.val-player.bearing.val)
  local screen_width = -sin(field_of_view/2) * 2
  return round(offset_from_center_of_screen/screen_width * 128 + 127/2)
 end
@@ -239,7 +235,7 @@ end
 function screenx_to_angle(screenx)
  local screen_width = -sin(field_of_view/2) * 2
  local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
- return player.bearing+atan2(offset_from_center_of_screen, 1)+1/4
+ return makeangle(player.bearing.val+atan2(offset_from_center_of_screen, 1)+1/4)
 end
 -- end ext
 
@@ -470,6 +466,13 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
  local side_to_left=side_length*face_length<0
 
  local angle_to_mob = vec_to_mob:tobearing()
+
+ -- If they're behind us, do not draw.
+ -- Due to how mob detection happens, mobs behind the player can sometimes get fed in
+ if cos(angle_to_mob.val - player.bearing.val) < 0 then
+  cached_mobs[mob.id]={draw=false}
+  return cached_mobs[mob.id]
+ end
 
  local height=2*calc_fisheye_correction(angle_to_mob)*height_scale/distance/field_of_view
  local screen_width=abs(face_length)*height/2

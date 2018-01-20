@@ -1,8 +1,4 @@
 -- START LIB
-function ceil(n)
-  return -flr(-n)
-end
-
 function trunc(n)
   return flr(n)
 end
@@ -225,7 +221,7 @@ makeangle = (function()
 end)()
 
 function angle_to_screenx(angle)
-  local offset_from_center_of_screen = -sin((angle-player.bearing).val)
+  local offset_from_center_of_screen = -sin(angle.val-player.bearing.val)
   local screen_width = -sin(field_of_view/2) * 2
   return round(offset_from_center_of_screen/screen_width * 128 + 127/2)
 end
@@ -233,6 +229,6 @@ end
 function screenx_to_angle(screenx)
   local screen_width = -sin(field_of_view/2) * 2
   local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
-  return player.bearing+atan2(offset_from_center_of_screen, 1)+1/4
+  return makeangle(player.bearing.val+atan2(offset_from_center_of_screen, 1)+1/4)
 end
 -- END LIB
