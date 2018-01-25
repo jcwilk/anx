@@ -460,10 +460,10 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   end
 
   local width_vector=(mob_bearing-.25):tovector()
-  local side_length=(width_vector*normal_vec_to_mob)/8
-  local face_length=mob_bearing:tovector()*normal_vec_to_mob
+  local side_length=(width_vector*normal_vec_to_mob)/8 --perceived length of side in meters
+  local face_length=mob_bearing:tovector()*normal_vec_to_mob --perceived length of face in meters
 
-  local side_to_left=side_length*face_length<0
+  local side_to_left=side_length*face_length<0 --is the side of the mob going to be drawn to the left of the face?
 
   local angle_to_mob = vec_to_mob:tobearing()
 
@@ -475,24 +475,31 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   end
 
   local height=2*calc_fisheye_correction(angle_to_mob)*height_scale/distance/field_of_view
+
+  --expand
   local screen_width=abs(face_length)*height/2
   local screen_side=abs(side_length)*height/2
 
-  local screenx_mob=angle_to_screenx(angle_to_mob)
+  local screenx_mob=angle_to_screenx(angle_to_mob) --the center of the mob in screen coords
+
+  --the x,y of the mob is the center of the mob, so offset the face slightly depending on where the side is
   if side_to_left then
     screenx_mob+=screen_side/2
   else
     screenx_mob-=screen_side/2
   end
-  local left_screenx_mob=screenx_mob-screen_width/2
-  local screeny=flr(64-height*(1-height_ratio))
+
+  local left_screenx_mob=screenx_mob-screen_width/2 --the left edge of the face in screen coords
+  local screeny=flr(64-height*(1-height_ratio)) --the top edge of mob in screen coords
 
   local columns={}
-  local column
+  local column, xo, xf
   for col_i=0,7 do
+    xo=flr(left_screenx_mob+col_i/8*screen_width)
+    xf=flr(left_screenx_mob+(col_i+1)/8*screen_width)-1
     column={
-      xo=flr(left_screenx_mob+col_i/8*screen_width),
-      xf=flr(left_screenx_mob+(col_i+1)/8*screen_width)-1
+      xo=xo,
+      xf=max(xo,xf)
     }
     add(columns,column)
   end
@@ -501,7 +508,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local row,pixel,pixel_color
   local sides, side
 
-  local spritex=8*flr(mob.sprite_id%16)
+  local spritex=8*(mob.sprite_id%16)
   local spritey=8*flr(mob.sprite_id/16)
 
   local total_rows=16
@@ -529,14 +536,14 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
       if pixel_color > 0 then
         if side_to_left then
           side={
-            xo=columns[col_i+1].xo-screen_side,
+            xo=columns[col_i+1].xo-screen_side+1,
             xf=columns[col_i+1].xo-1,
             color=color_translate_map[pixel_color]
           }
         else
           side={
             xo=columns[col_i+1].xf+1,
-            xf=columns[col_i+1].xf+screen_side,
+            xf=columns[col_i+1].xf+screen_side-1,
             color=color_translate_map[pixel_color]
           }
         end
@@ -592,8 +599,8 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
           end
         end
         for i=1,#mob_data.columns do
-          pixel = row.pixels[i]
           column = mob_data.columns[i]
+          pixel = row.pixels[i]
           if pixel > 0 then
             rectfill(column.xo,row.yo,column.xf,row.yf,pixel)
           end
@@ -675,13 +682,13 @@ makemobile = (function()
     local m_to_p=mob.coords-player.coords
     local distance=m_to_p:tomagnitude()
     if distance < 4 then
-      if abs(mob:turn_towards(player)) < .1 then
-        if distance > 2 then
-          mob:apply_movement(m_to_p/distance*-.04)
-        else
-          mob:talk()
-        end
-      end
+      -- if abs(mob:turn_towards(player)) < .1 then
+      --   if distance > 2 then
+      --     mob:apply_movement(m_to_p/distance*-.04)
+      --   else
+      --     mob:talk()
+      --   end
+      -- end
     end
   end
 
