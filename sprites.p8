@@ -495,8 +495,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   local columns={}
   local column, xo, xf
   for col_i=0,7 do
-    xo=flr(left_screenx_mob+col_i/8*screen_width)
-    xf=flr(left_screenx_mob+(col_i+1)/8*screen_width)-1
+    xo=left_screenx_mob+col_i/8*screen_width
+    xf=left_screenx_mob+(col_i+1)/8*screen_width-1
     column={
       xo=xo,
       xf=max(xo,xf)
@@ -533,17 +533,17 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
           pixel_color=15
         end
       end
-      if pixel_color > 0 then
+      if pixel_color > 0 and screen_side >= 1 then
         if side_to_left then
           side={
-            xo=columns[col_i+1].xo-screen_side+1,
+            xo=columns[col_i+1].xo-screen_side,
             xf=columns[col_i+1].xo-1,
             color=color_translate_map[pixel_color]
           }
         else
           side={
             xo=columns[col_i+1].xf+1,
-            xf=columns[col_i+1].xf+screen_side-1,
+            xf=columns[col_i+1].xf+screen_side,
             color=color_translate_map[pixel_color]
           }
         end
