@@ -324,6 +324,10 @@ function is_sprite_door(sprite_id)
  return fget(sprite_id,1)
 end
 
+function is_sprite_house_door(sprite_id)
+ return sprite_id == 5 --sprite id of the house door
+end
+
 function cache_sprite(sprite_id)
  if not cached_sprites[sprite_id] then
   local pixels_tall=16
@@ -655,6 +659,10 @@ makemobile = (function()
    end
    if is_sprite_door(sprite_id) and has_unpaid_whisky() then
     fail_steal_whisky()
+    return orig
+   end
+   if is_sprite_house_door(sprite_id) and not has_whisky then
+    fail_enter_house()
     return orig
    end
   end
@@ -1312,6 +1320,10 @@ end
 
 function has_unpaid_whisky()
  return has_whisky and coin_count > 0
+end
+
+function fail_enter_house()
+ popup("byob! nO FREELOADERS!",30,9)
 end
 
 making_payment=false

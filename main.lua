@@ -529,6 +529,10 @@ function has_unpaid_whisky()
   return has_whisky and coin_count > 0
 end
 
+function fail_enter_house()
+  popup("byob! nO FREELOADERS!",30,9)
+end
+
 making_payment=false
 function make_payment()
   if has_unpaid_whisky() then
