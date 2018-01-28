@@ -503,6 +503,7 @@ end
 
 coin_count=0
 function add_coin()
+  popup("fOUND A COIN!",30,10,true)
   coin_count+=1
 end
 
@@ -512,13 +513,26 @@ end
 
 has_whisky=false
 function add_whisky()
+  popup("pICKED UP WHISKY!",30,9,true)
   has_whisky=true
+end
+
+function fail_whisky()
+  popup("nOT ENOUGH COINS, NEED 5!",20,9)
+end
+
+function fail_steal_whisky()
+  popup("cAN'T LEAVE WITHOUT PAYING!",30,9)
+end
+
+function has_unpaid_whisky()
+  return has_whisky and coin_count > 0
 end
 
 making_payment=false
 function make_payment()
-  if has_whisky and coin_count > 0 then
-    popup("pAYING FOR WHISKY...",20,11)
+  if has_unpaid_whisky() then
+    popup("pAYING FOR WHISKY...",10,11)
     making_payment = true
   end
 end

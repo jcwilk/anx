@@ -653,6 +653,10 @@ makemobile = (function()
       if is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
         return orig
       end
+      if is_sprite_door(sprite_id) and has_unpaid_whisky() then
+        fail_steal_whisky()
+        return orig
+      end
     end
 
     return val
@@ -682,13 +686,13 @@ makemobile = (function()
     local m_to_p=mob.coords-player.coords
     local distance=m_to_p:tomagnitude()
     if distance < 4 then
-      -- if abs(mob:turn_towards(player)) < .1 then
-      --   if distance > 2 then
-      --     mob:apply_movement(m_to_p/distance*-.04)
-      --   else
-      --     mob:talk()
-      --   end
-      -- end
+      if abs(mob:turn_towards(player)) < .1 then
+        if distance > 2 then
+          mob:apply_movement(m_to_p/distance*-.04)
+        else
+          mob:talk()
+        end
+      end
     end
   end
 
@@ -746,6 +750,8 @@ makewhisky = (function()
     if coin_count >= 5 then
       mob:kill()
       add_whisky()
+    else
+      fail_whisky()
     end
   end
 

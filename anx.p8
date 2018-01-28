@@ -653,6 +653,10 @@ makemobile = (function()
    if is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
     return orig
    end
+   if is_sprite_door(sprite_id) and has_unpaid_whisky() then
+    fail_steal_whisky()
+    return orig
+   end
   end
 
   return val
@@ -682,13 +686,13 @@ makemobile = (function()
   local m_to_p=mob.coords-player.coords
   local distance=m_to_p:tomagnitude()
   if distance < 4 then
-   -- if abs(mob:turn_towards(player)) < .1 then
-   --   if distance > 2 then
-   --     mob:apply_movement(m_to_p/distance*-.04)
-   --   else
-   --     mob:talk()
-   --   end
-   -- end
+   if abs(mob:turn_towards(player)) < .1 then
+    if distance > 2 then
+     mob:apply_movement(m_to_p/distance*-.04)
+    else
+     mob:talk()
+    end
+   end
   end
  end
 
@@ -746,6 +750,8 @@ makewhisky = (function()
   if coin_count >= 5 then
    mob:kill()
    add_whisky()
+  else
+   fail_whisky()
   end
  end
 
@@ -1282,6 +1288,7 @@ end
 
 coin_count=0
 function add_coin()
+ popup("fOUND A COIN!",30,10,true)
  coin_count+=1
 end
 
@@ -1291,13 +1298,26 @@ end
 
 has_whisky=false
 function add_whisky()
+ popup("pICKED UP WHISKY!",30,9,true)
  has_whisky=true
+end
+
+function fail_whisky()
+ popup("nOT ENOUGH COINS, NEED 5!",20,9)
+end
+
+function fail_steal_whisky()
+ popup("cAN'T LEAVE WITHOUT PAYING!",30,9)
+end
+
+function has_unpaid_whisky()
+ return has_whisky and coin_count > 0
 end
 
 making_payment=false
 function make_payment()
- if has_whisky and coin_count > 0 then
-  popup("pAYING FOR WHISKY...",20,11)
+ if has_unpaid_whisky() then
+  popup("pAYING FOR WHISKY...",10,11)
   making_payment = true
  end
 end
