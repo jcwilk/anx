@@ -418,10 +418,10 @@ function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screen
 
  return {
   key=-distance,
-  add_hit=function(obj,new_dist,screenx,draw_width)
+  add_hit=function(obj,new_dist,newscreenx,draw_width)
    obj.key = (obj.key*hit_count+-new_dist) / (hit_count+1)
    hit_count+=1
-   screenxright=screenx+draw_width-1
+   screenxright=newscreenx+draw_width-1
   end,
   draw=function(obj)
    --sspr sx sy sw sh dx dy [dw dh] [flip_x] [flip_y]
@@ -430,7 +430,7 @@ function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screen
    local topy = round(63.5-sprite_height*sprites_tall*(sprites_tall/2-height_ratio))
    local height = bottomy-topy
 
-   sspr((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8,1,sprites_tall*8,screenx,topy,screenxright-screenxleft+1,height)
+   sspr((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8,1,sprites_tall*8,screenxleft,topy,screenxright-screenxleft+1,height)
   end
  }
 end
