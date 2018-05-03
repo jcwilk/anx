@@ -243,56 +243,11 @@ end
 
 cached_sprites={}
 
-aomx = {}
-aomy = {}
-for ix=1,8 do
- aomx[ix] = {}
- aomy[ix] = {}
- for iy=1,16 do
-  aomx[ix][iy] = 0
-  aomy[ix][iy] = 0
- end
-end
-
 function minn(a,b)
  if a < b then
   return a
  else
   return b
- end
-end
-
-is_running_wander=false
-function wander_aom()
- if max_screenx_offset == 0 then
-  if not is_running_wander then
-   return
-  else
-   for ix=1,8 do
-    for iy=1,16 do
-     aomx[ix][iy] = 0
-     aomy[ix][iy] = 0
-    end
-   end
-   is_running_wander=false
-   return
-  end
- end
- is_running_wander = true
-
- if enable_anxiety_x_offset then
-  for ix=1,8 do
-   for iy=1,16 do
-    xw = (rnd()-.5)*max_screenx_offset*.1
-    aomx[ix][iy] = mid(-max_screenx_offset,xw + aomx[ix][iy],max_screenx_offset)
-   end
-  end
- end
- for ix=1,8 do
-  for iy=1,16 do
-   yw = (rnd()-.5)*max_screenx_offset*.1
-   aomy[ix][iy] = mid(-max_screenx_offset,yw + aomy[ix][iy],max_screenx_offset)
-  end
  end
 end
 
@@ -399,10 +354,61 @@ function update_fog_swirl()
  fog_pattern+= 0b0.1
 end
 
+function reset_anxiety_offsets()
+ offsetsx = {
+  {0,0,0,0},
+  {0,0,0,0},
+  {0,0,0,0},
+  {0,0,0,0}
+ }
+
+ offsetsy = {
+  {0,0,0,0},
+  {0,0,0,0},
+  {0,0,0,0},
+  {0,0,0,0}
+ }
+end
+
+reset_anxiety_offsets()
+
+verticaloffsets = {0,0,0,0,0,0,0,0}
+zoffsets = {0,0,0,0,0,0,0,0}
+anxiety_vertical_offsets_scalar = 0
+
+function update_panic_offsets()
+ local clamp_scale = 20
+ local vertical_clamp_scale = 5 --the extra vertical-only offset that always gets added
+ local z_clamp_scale = .5
+ if is_panic_attack then
+  for x=1,4 do
+   for y=1,4 do
+    offsetsx[x][y] += (rnd()-.5)*2--/2
+    offsetsy[x][y] += (rnd()-.5)*2--/2
+    offsetsx[x][y] = mid(-anxiety_recover_cooldown*clamp_scale, offsetsx[x][y], anxiety_recover_cooldown*clamp_scale)
+    offsetsy[x][y] = mid(-anxiety_recover_cooldown*clamp_scale, offsetsy[x][y], anxiety_recover_cooldown*clamp_scale)
+   end
+  end
+ end
+ for x=1,8 do
+  verticaloffsets[x] += (rnd()-.5)
+  verticaloffsets[x] = mid(-vertical_clamp_scale*anxiety_vertical_offsets_scalar,verticaloffsets[x],vertical_clamp_scale*anxiety_vertical_offsets_scalar)
+ end
+ for x=1,8 do
+  zoffsets[x] += (rnd()-.5)/2
+  zoffsets[x] = mid(0,zoffsets[x],z_clamp_scale*anxiety_vertical_offsets_scalar)
+ end
+end
+
 function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screenx)
  if distance < distance_from_player_cutoff then
   return
  end
+
+ local new_distance = distance - zoffsets[pixel_col+1]
+ local new_distance_ratio = new_distance / distance
+ distance = new_distance
+ local extra_overlap = draw_width * (1 / new_distance_ratio - 1) / 2
 
  local sprites_tall
  if is_sprite_half_height(sprite_id) then
@@ -412,27 +418,75 @@ function deferred_wall_draw(angle,distance,sprite_id,pixel_col,draw_width,screen
  end
 
  local screenxleft=screenx
- local screenxright=screenx+draw_width-1
+ local screenxright=screenxleft+draw_width-1
  local hit_count=1
  local fisheye_correction=calc_fisheye_correction(angle)
 
- return {
+ local obj = {
   key=-distance,
   add_hit=function(obj,new_dist,newscreenx,draw_width)
    obj.key = (obj.key*hit_count+-new_dist) / (hit_count+1)
    hit_count+=1
    screenxright=newscreenx+draw_width-1
-  end,
-  draw=function(obj)
+  end
+ }
+ local verticaloffset = verticaloffsets[pixel_col+1]
+ if is_panic_attack then
+  obj.draw=function(obj)
+   screenxleft -= extra_overlap
+   screenxright += extra_overlap
+
    --sspr sx sy sw sh dx dy [dw dh] [flip_x] [flip_y]
    local sprite_height=fisheye_correction*height_scale/distance/field_of_view
+   -- local topy = 63.5-sprite_height*sprites_tall*(2/2-height_ratio) --TODO - this is off for half height sprites, why?
+   -- local pixel_height = sprite_height/8
+   local pixels_tall = sprites_tall*8
+
    local bottomy = round(63.5+sprite_height*2*height_ratio)
    local topy = round(63.5-sprite_height*sprites_tall*(sprites_tall/2-height_ratio))
    local height = bottomy-topy
+   local pixel_height = height/sprites_tall/8
 
-   sspr((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8,1,sprites_tall*8,screenxleft,topy,screenxright-screenxleft+1,height)
+   local thisxleft, thisxright, thisytop, thisybottom, offsetx, offsety
+   for i=0,pixels_tall-1 do
+
+    colr=sget((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8+i)
+    if colr > 0 then
+     thisxleft = screenxleft
+     thisxright = screenxright
+     thisytop = topy+i*pixel_height
+     thisybottom = ceil(topy+(i+1)*pixel_height)
+
+     --test offsets
+     offsetx = offsetsx[pixel_col % 4 + 1][i % 4 + 1]
+     offsety = offsetsy[pixel_col % 4 + 1][i % 4 + 1] + verticaloffset
+     thisxleft += offsetx
+     thisxright += offsetx
+     thisybottom += offsety
+     thisytop += offsety
+     --endtest
+
+     rectfill(thisxleft,thisytop,thisxright,thisybottom,colr)
+    end
+   end
   end
- }
+ else
+  obj.draw=function(obj)
+   local width = (screenxright - screenxleft + 1) + round(extra_overlap*2)
+   screenxleft -= round(extra_overlap)
+
+
+   --sspr sx sy sw sh dx dy [dw dh] [flip_x] [flip_y]
+   local sprite_height=fisheye_correction*height_scale/distance/field_of_view
+   local bottomy = round(63.5+sprite_height*2*height_ratio + verticaloffset)
+   local topy = round(63.5-sprite_height*sprites_tall*(sprites_tall/2-height_ratio) + verticaloffset)
+   local height = bottomy-topy
+
+   sspr((sprite_id%16)*8+pixel_col,flr(sprite_id/16)*8,1,sprites_tall*8,screenxleft,topy,width,height)
+  end
+ end
+
+ return obj
 end
 
 cached_mobs={}
@@ -532,11 +586,22 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
    pixel_color=sget(col_i+spritex,row_i+spritey)
    if pixel_color == 14 then
     if face_length <= 0 then
-     pixel_color=7
+     if is_panic_attack then
+      pixel_color=8 --red
+     else
+      pixel_color=7
+     end
     else
-     pixel_color=15
+     if is_panic_attack then
+      pixel_color=1
+     else
+      pixel_color=15
+     end
     end
+   elseif pixel_color > 0 and is_panic_attack then
+    pixel_color=1
    end
+
    if pixel_color > 0 and screen_side >= 1 then
     if side_to_left then
      side={
@@ -551,6 +616,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
       color=color_translate_map[pixel_color]
      }
     end
+
     add(sides,side)
    end
    add(row.pixels,pixel_color)
@@ -975,6 +1041,9 @@ function raycast_walls()
    intx= player.coords.x + distance * pv.x
   end
 
+  local draw_close_fog = false
+  local draw_far_fog = false
+
   while not found do
    if (currx + xstep/2 - intx) / pv.x < (curry + ystep/2 - inty) / pv.y then
     intx= currx + xstep/2
@@ -993,19 +1062,12 @@ function raycast_walls()
    end
 
    if distance > draw_distance * .9 and not drawn_fog then
-    new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width,screenx)
-    if new_draw then
-     drawn_fog=true
-     add(deferred_draws,new_draw)
-    end
+    draw_close_fog = true
    end
 
    if (distance > draw_distance) then
     found=true
-    new_draw=deferred_fog_draw(pa,draw_distance,draw_width,screenx,true)
-    if new_draw then
-     add(deferred_draws,new_draw)
-    end
+    draw_far_fog = true
    else
     sprite_id=mget(currx,-curry)
     if is_sprite_wall(sprite_id) then
@@ -1050,6 +1112,21 @@ function raycast_walls()
       end
      end
     end
+   end
+  end
+
+  if draw_close_fog or is_panic_attack then
+   new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width,screenx)
+   if new_draw then
+    drawn_fog=true
+    add(deferred_draws,new_draw)
+   end
+  end
+
+  if draw_far_fog or is_panic_attack then
+   new_draw=deferred_fog_draw(pa,draw_distance,draw_width,screenx,true)
+   if new_draw then
+    add(deferred_draws,new_draw)
    end
   end
 
@@ -1158,29 +1235,26 @@ function recalc_settings()
  height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
  draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
  turn_amount = orig_turn_amount * (2 - anxiety_factor)
- height_ratio = orig_height_ratio * (.8 + anxiety_factor*.2)
+
+ --adjusting height seems too confusing, leaving that for now
+ --height_ratio = orig_height_ratio * (.8 + anxiety_factor*.2)
+
  speed = orig_speed * (2 - anxiety_factor)
- if is_panic_attack then
-  enable_anxiety_x_offset = true
-  max_screenx_offset = 80
- else
-  enable_anxiety_x_offset = false
-  max_screenx_offset = (1 - anxiety_factor)
- end
- if true then
-  return
- end
- --TODO
- --wander_aom()
+
+ anxiety_vertical_offsets_scalar = 1 - anxiety_factor
 end
 
 function add_anxiety()
  current_anxiety+=3
  if current_anxiety >= max_anxiety then
   current_anxiety = max_anxiety
+
+  if not is_panic_attack then
+   reset_anxiety_offsets()
+  end
   is_panic_attack = true
  end
- anxiety_recover_cooldown = 3
+ anxiety_recover_cooldown = 10
 end
 
 function _update()
@@ -1251,6 +1325,8 @@ function _update()
  update_inventory()
 
  update_popup()
+
+ update_panic_offsets()
 end
 
 function draw_stars()
@@ -1270,8 +1346,13 @@ function sort_by_distance(m)
 end
 
 function draw_background()
- rectfill(0,0,127,63,sky_color)
- rectfill(0,64,127,127,ground_color)
+ if is_panic_attack then
+  rectfill(0,0,127,63,8) --red sky
+  rectfill(0,64,127,127,0)
+ else
+  rectfill(0,0,127,63,sky_color)
+  rectfill(0,64,127,127,ground_color)
+ end
  draw_stars()
 end
 
@@ -1304,7 +1385,7 @@ function clear_coins()
  coin_count=0
 end
 
-has_whisky=false
+has_whisky=true
 function add_whisky()
  popup("pICKED UP WHISKY!",30,9,true)
  has_whisky=true

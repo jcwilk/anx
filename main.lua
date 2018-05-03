@@ -182,6 +182,9 @@ function raycast_walls()
       intx= player.coords.x + distance * pv.x
     end
 
+    local draw_close_fog = false
+    local draw_far_fog = false
+
     while not found do
       if (currx + xstep/2 - intx) / pv.x < (curry + ystep/2 - inty) / pv.y then
         intx= currx + xstep/2
@@ -200,19 +203,12 @@ function raycast_walls()
       end
 
       if distance > draw_distance * .9 and not drawn_fog then
-        new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width,screenx)
-        if new_draw then
-          drawn_fog=true
-          add(deferred_draws,new_draw)
-        end
+        draw_close_fog = true
       end
 
       if (distance > draw_distance) then
         found=true
-        new_draw=deferred_fog_draw(pa,draw_distance,draw_width,screenx,true)
-        if new_draw then
-          add(deferred_draws,new_draw)
-        end
+        draw_far_fog = true
       else
         sprite_id=mget(currx,-curry)
         if is_sprite_wall(sprite_id) then
@@ -257,6 +253,21 @@ function raycast_walls()
             end
           end
         end
+      end
+    end
+
+    if draw_close_fog or is_panic_attack then
+      new_draw=deferred_fog_draw(pa,draw_distance*.9,draw_width,screenx)
+      if new_draw then
+        drawn_fog=true
+        add(deferred_draws,new_draw)
+      end
+    end
+
+    if draw_far_fog or is_panic_attack then
+      new_draw=deferred_fog_draw(pa,draw_distance,draw_width,screenx,true)
+      if new_draw then
+        add(deferred_draws,new_draw)
       end
     end
 
@@ -365,29 +376,26 @@ function recalc_settings()
   height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
   draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
   turn_amount = orig_turn_amount * (2 - anxiety_factor)
-  height_ratio = orig_height_ratio * (.8 + anxiety_factor*.2)
+
+  --adjusting height seems too confusing, leaving that for now
+  --height_ratio = orig_height_ratio * (.8 + anxiety_factor*.2)
+
   speed = orig_speed * (2 - anxiety_factor)
-  if is_panic_attack then
-    enable_anxiety_x_offset = true
-    max_screenx_offset = 80
-  else
-    enable_anxiety_x_offset = false
-    max_screenx_offset = (1 - anxiety_factor)
-  end
-  if true then
-    return
-  end
-  --TODO
-  --wander_aom()
+
+  anxiety_vertical_offsets_scalar = 1 - anxiety_factor
 end
 
 function add_anxiety()
   current_anxiety+=3
   if current_anxiety >= max_anxiety then
     current_anxiety = max_anxiety
+
+    if not is_panic_attack then
+      reset_anxiety_offsets()
+    end
     is_panic_attack = true
   end
-  anxiety_recover_cooldown = 3
+  anxiety_recover_cooldown = 10
 end
 
 function _update()
@@ -458,6 +466,8 @@ function _update()
   update_inventory()
 
   update_popup()
+
+  update_panic_offsets()
 end
 
 function draw_stars()
@@ -477,8 +487,13 @@ function sort_by_distance(m)
 end
 
 function draw_background()
-  rectfill(0,0,127,63,sky_color)
-  rectfill(0,64,127,127,ground_color)
+  if is_panic_attack then
+    rectfill(0,0,127,63,8) --red sky
+    rectfill(0,64,127,127,0)
+  else
+    rectfill(0,0,127,63,sky_color)
+    rectfill(0,64,127,127,ground_color)
+  end
   draw_stars()
 end
 
@@ -511,7 +526,7 @@ function clear_coins()
   coin_count=0
 end
 
-has_whisky=false
+has_whisky=true
 function add_whisky()
   popup("pICKED UP WHISKY!",30,9,true)
   has_whisky=true
