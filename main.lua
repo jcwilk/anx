@@ -325,6 +325,10 @@ current_anxiety=0
 anxiety_recover_cooldown=0
 function tick_anxiety()
   if anxiety_recover_cooldown > 0 then
+    if is_panic_attack then
+      popup("!panic attack!",2,8)
+    end
+
     anxiety_recover_cooldown -= 1/30
     return
   end
@@ -393,6 +397,7 @@ function add_anxiety()
     if not is_panic_attack then
       reset_anxiety_offsets()
     end
+
     is_panic_attack = true
   end
   anxiety_recover_cooldown = 10
