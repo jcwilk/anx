@@ -557,7 +557,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   xf=left_screenx_mob+(col_i+1)/8*screen_width-1
   column={
    xo=xo,
-   xf=max(xo,xf)
+   xf=max(xo,xf),
+   offset=verticaloffsets[col_i+1]
   }
   add(columns,column)
  end
@@ -570,6 +571,7 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
  local spritey=8*flr(mob.sprite_id/16)
 
  local total_rows=16
+ local vertical_offset
  if is_sprite_half_height(mob.sprite_id) then --hax for half height mobs
   total_rows=8
   spritey-=8
@@ -584,6 +586,8 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   sides={}
   for col_i=0,7 do
    pixel_color=sget(col_i+spritex,row_i+spritey)
+   vertical_offset=verticaloffsets[col_i+1]
+
    if pixel_color == 14 then
     if face_length <= 0 then
      if is_panic_attack then
@@ -607,13 +611,15 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
      side={
       xo=columns[col_i+1].xo-screen_side,
       xf=columns[col_i+1].xo-1,
-      color=color_translate_map[pixel_color]
+      color=color_translate_map[pixel_color],
+      offset=vertical_offset
      }
     else
      side={
       xo=columns[col_i+1].xf+1,
       xf=columns[col_i+1].xf+screen_side,
-      color=color_translate_map[pixel_color]
+      color=color_translate_map[pixel_color],
+      offset=vertical_offset
      }
     end
 
@@ -657,22 +663,28 @@ function deferred_mob_draw(mob,dir_vector,screenx,draw_width)
   key=-mob_data.distance,
   draw=function()
    local pixel,column
+
+   --Draw the sides of the figures first since the sides will always be behind the faces
    for row in all(mob_data.rows) do
     if mob_data.side_length >= 1 then
      for side in all(row.sides) do
-      rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
+      rectfill(side.xo,row.yo+side.offset,side.xf,row.yf+side.offset,side.color)
      end
     elseif mob_data.side_length <= -1 then
      for i=#row.sides,1,-1 do
       side=row.sides[i]
-      rectfill(side.xo,row.yo,side.xf,row.yf,side.color)
+      rectfill(side.xo,row.yo+side.offset,side.xf,row.yf+side.offset,side.color)
      end
     end
+   end
+
+   --Draw the face of the figures last so that they're always on top
+   for row in all(mob_data.rows) do
     for i=1,#mob_data.columns do
      column = mob_data.columns[i]
      pixel = row.pixels[i]
      if pixel > 0 then
-      rectfill(column.xo,row.yo,column.xf,row.yf,pixel)
+      rectfill(column.xo,row.yo+column.offset,column.xf,row.yf+column.offset,pixel)
      end
     end
    end
@@ -1385,7 +1397,7 @@ function clear_coins()
  coin_count=0
 end
 
-has_whisky=true
+has_whisky=false
 function add_whisky()
  popup("pICKED UP WHISKY!",30,9,true)
  has_whisky=true

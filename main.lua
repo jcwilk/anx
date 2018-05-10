@@ -526,7 +526,7 @@ function clear_coins()
   coin_count=0
 end
 
-has_whisky=true
+has_whisky=false
 function add_whisky()
   popup("pICKED UP WHISKY!",30,9,true)
   has_whisky=true
