@@ -1373,12 +1373,15 @@ function draw_background()
  draw_stars()
 end
 
+is_panic_anxiety_flash=false
 function draw_anxiety_bar()
  rectfill(54,1,126,6,0)
  rectfill(83,2,125,5,1)
+
+ anxiety_color = 5 --dark gray
  if current_anxiety > 0 then
   local anx_pixels = (125-83) / max_anxiety * current_anxiety
-  rectfill(83,2,min(83+anx_pixels,125),5,7)
+  rectfill(83,2,min(83+anx_pixels,125),5,7) --white bar for added anxiety
   local disp_pixels
   if is_panic_attack then
    disp_pixels = 125-83
@@ -1386,10 +1389,19 @@ function draw_anxiety_bar()
    disp_pixels = (125-83) / max_anxiety * visual_anxiety
   end
   rectfill(83,2,min(83+disp_pixels,125),5,8)
-  print("ANXIETY",55,1,6)
- else
-  print("ANXIETY",55,1,5)
+
+  if is_panic_attack then
+   if is_panic_anxiety_flash then
+    anxiety_color = 8
+   end
+   is_panic_anxiety_flash = not is_panic_anxiety_flash
+  elseif current_anxiety > visual_anxiety then
+   anxiety_color = 7
+  else
+   anxiety_color = 6 --med gray
+  end
  end
+ print("ANXIETY",55,1,anxiety_color)
 end
 
 coin_count=0
