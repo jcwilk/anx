@@ -779,7 +779,9 @@ makemobile = (function()
     local distance=m_to_p:tomagnitude()
     if distance < 4 then
       if abs(mob:turn_towards(player)) < .1 then
-        if distance > 2 then
+
+        --if this is exactly 2 then the wiggle room between 1 spaced blocks permits them to get in range
+        if distance > 1.8 then
           mob:apply_movement(m_to_p/distance*-.04)
         else
           mob:talk()
