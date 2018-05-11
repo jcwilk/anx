@@ -288,7 +288,7 @@ end
 
 mobile_pool = make_pool()
 wall_pool = make_pool()
-player =makemobile(false,makevec2d(10.369,-33.525),makeangle(.6601))
+player =makeplayer(false,makevec2d(10.369,-33.525),makeangle(.6601))
 
 for x=0,127 do
   for y=0,63 do

@@ -735,10 +735,16 @@ makemobile = (function()
       if is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
         return orig
       end
+
+      if is_sprite_door(sprite_id) and not mob.can_enter_doors then
+        return orig
+      end
+
       if is_sprite_door(sprite_id) and has_unpaid_whisky() then
         fail_steal_whisky()
         return orig
       end
+
       if is_sprite_house_door(sprite_id) and not has_whisky then
         fail_enter_house()
         return orig
@@ -798,6 +804,14 @@ makemobile = (function()
       hitbox_radius=mob_hitbox_radius,
       update=default_update
     }
+    return obj
+  end
+end)()
+
+makeplayer = (function()
+  return function(sprite_id,coords,bearing)
+    local obj=makemobile(sprite_id,coords,bearing)
+    obj.can_enter_doors=true
     return obj
   end
 end)()
