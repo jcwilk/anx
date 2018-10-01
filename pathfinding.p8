@@ -5,17 +5,89 @@ __lua__
 -- start lib
 
 function make_pathfinding(sx,sy,fx,fy,check_can_pass)
-  local xstep = abs(fx-sx)/(fx-sx)
-  local ystep = abs(fy-sy)/(fy-sy)
-  local path = {}
 
-  for x = sx,fx,xstep do
-    add(path, {x,sy})
+  -- local xstep = abs(fx-sx)/(fx-sx)
+  -- local ystep = abs(fy-sy)/(fy-sy)
+  -- local path = {}
+
+  -- for x = sx,fx,xstep do
+  --   add(path, {x,sy})
+  -- end
+  -- for y = sy,fy,ystep do
+  --   add(path, {fx,y})
+  -- end
+  -- return {path=path}
+
+
+
+  -- Q1 - s1 remaining to check
+  -- S1 - spot including coords and distance so far and list of coords to get there
+
+  -- Add spot (previous spot)
+  -- Check if it's destination
+  -- Check if it's a wall
+  -- Check if it's been visited
+  -- Check how far to target
+  -- Insertion sort based on total distance, adding the new spot to the prev list
+  local visited = {}
+  local spot_q = {}
+  add_spot = function(old_spot, newx, newy)
+    if newx == fx and newy == fy then
+      return true --we found the target!
+    elseif not check_can_pass(newx,newy) then
+      return false --skip it, it's a wall
+    elseif visited[newx] and visited[newx][newy] then
+      return false --skip it, we've seen it
+    end
+
+    if not visited[newx] then
+      visited[newx] = {}
+    end
+    visited[newx][newy] = true
+
+    --TODO - calculate total expected distance and insertion sort
+
+    local new_path = {}
+    for s in all(old_spot.path) do
+      add(new_path,s)
+    end
+    add(new_path,{newx,newy})
+    add(spot_q,{path=new_path})
+    return false
   end
-  for y = sy,fy,ystep do
-    add(path, {fx,y})
+
+  -- Setup
+  -- Add four surrounding spots to Q1 with distance 1
+
+  add_spot({path={}}, sx, sy)
+
+  local obj = {
+    visited = visited,
+    path = {}
+  }
+
+  obj.expand_next_spot = function()
+    local next_spot = spot_q[#spot_q]
+    spot_q[#spot_q] = nil
+    local x = next_spot.path[#next_spot.path][1]
+    local y = next_spot.path[#next_spot.path][2]
+    local res = false
+    res = res or add_spot(next_spot, x-1, y)
+    res = res or add_spot(next_spot, x+1, y)
+    res = res or add_spot(next_spot, x, y-1)
+    res = res or add_spot(next_spot, x, y+1)
+
+    obj.path = next_spot.path
+
+    return res
   end
-  return {path=path}
+
+  -- while not expand_next_spot() do
+  -- end
+
+  obj.expand_next_spot()
+
+  return obj
 end
 
 -- end lib
@@ -42,13 +114,27 @@ pf = make_pathfinding(sx,sy,fx,fy,check_can_pass)
 function _draw()
   cls()
   map(0,0,0,0,16,16)
+
+  --draw visited
+  for x = 0,15 do
+    for y = 0,15 do
+      if pf.visited[x] and pf.visited[x][y] then
+        spr(4,x*8,y*8)
+      end
+    end
+  end
+
+  --draw path
   for n = 1,#pf.path do
     spr(5,pf.path[n][1]*8,pf.path[n][2]*8)
   end
 end
 
+is_done=false
 function _update()
-
+  if not is_done then
+    is_done = pf.expand_next_spot()
+  end
 end
 
 __gfx__
@@ -208,7 +294,7 @@ __map__
 0100010101010101010101010100000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0100000000000001000000000100030100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0100000001000001000001000100000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0100000001000000000001000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0100000001000000000001000100000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0101010101010101010101010101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 000100000632001320043200130001300013000330001300013001230012300123001230012300123001230012300123001230012300123001230012300173001230012300123001730017300173001730017300
