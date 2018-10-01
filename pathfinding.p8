@@ -4,112 +4,123 @@ __lua__
 
 -- start lib
 
-function make_pathfinding(sx,sy,fx,fy,check_can_pass)
-
-  -- local xstep = abs(fx-sx)/(fx-sx)
-  -- local ystep = abs(fy-sy)/(fy-sy)
-  -- local path = {}
-
-  -- for x = sx,fx,xstep do
-  --   add(path, {x,sy})
-  -- end
-  -- for y = sy,fy,ystep do
-  --   add(path, {fx,y})
-  -- end
-  -- return {path=path}
-
-
-
-  -- Q1 - s1 remaining to check
-  -- S1 - spot including coords and distance so far and list of coords to get there
-
-  -- Add spot (previous spot)
-  -- Check if it's destination
-  -- Check if it's a wall
-  -- Check if it's been visited
-  -- Check how far to target
-  -- Insertion sort based on total distance, adding the new spot to the prev list
-  local visited = {}
-  local spot_q = {}
-  add_spot = function(old_spot, newx, newy)
-    if newx == fx and newy == fy then
-      return true --we found the target!
-    elseif not check_can_pass(newx,newy) then
-      return false --skip it, it's a wall
-    elseif visited[newx] and visited[newx][newy] then
-      return false --skip it, we've seen it
-    end
-
-    if not visited[newx] then
-      visited[newx] = {}
-    end
-    visited[newx][newy] = true
-
-    --TODO - calculate total expected distance and insertion sort
-
-    local new_path = {}
-    for s in all(old_spot.path) do
-      add(new_path,s)
-    end
-    add(new_path,{newx,newy})
-    add(spot_q,{path=new_path})
+add_spot = function(obj, old_spot, newx, newy)
+  if newx == obj.fx and newy == obj.fy then
+    return true --we found the target!
+  elseif obj.max_length and obj.max_length <= #old_spot.path then
     return false
+  elseif not obj.check_can_pass(newx,newy) then
+    return false --skip it, it's a wall
+  elseif obj.visited[newx] and obj.visited[newx][newy] then
+    return false --skip it, we've seen it
   end
 
-  -- Setup
-  -- Add four surrounding spots to Q1 with distance 1
+  if not obj.visited[newx] then
+    obj.visited[newx] = {}
+  end
+  obj.visited[newx][newy] = true
 
-  add_spot({path={}}, sx, sy)
+  -- shallow copy the previous path into a new path and append the new coords to the end
+  local new_path = {}
+  for s in all(old_spot.path) do
+    add(new_path,s)
+  end
+  add(new_path,{newx,newy})
 
+  -- insert the new spot in place and shuffle the remaining ones further out to make room
+  local distance = #new_path + abs(newx - obj.fx) + abs(newy - obj.fy)
+  local insert_index = 1
+
+  while insert_index <= #obj.spot_q and distance <= obj.spot_q[insert_index].distance do
+    insert_index+= 1
+  end
+
+  local tmp = {path=new_path,distance=distance}
+  local swap
+  while insert_index <= #obj.spot_q do
+    swap = obj.spot_q[insert_index]
+    obj.spot_q[insert_index] = tmp
+    tmp = swap
+    insert_index+=1
+  end
+
+  add(obj.spot_q,tmp)
+  return false
+end
+
+local expand_next_spot = function(obj)
+  if #obj.spot_q == 0 then
+    obj.path = {path={}}
+    return true
+  end
+  local next_spot = obj.spot_q[#obj.spot_q]
+  obj.spot_q[#obj.spot_q] = nil
+  local x = next_spot.path[#next_spot.path][1]
+  local y = next_spot.path[#next_spot.path][2]
+  local res = false
+  res = res or add_spot(obj, next_spot, x-1, y)
+  res = res or add_spot(obj, next_spot, x+1, y)
+  res = res or add_spot(obj, next_spot, x, y-1)
+  res = res or add_spot(obj, next_spot, x, y+1)
+
+  obj.path = next_spot.path
+
+  return res
+end
+
+function make_pathfinding(sx,sy,fx,fy,check_can_pass)
   local obj = {
-    visited = visited,
-    path = {}
+    path = {},
+    max_length = false,
+    fx = fx,
+    fy = fy,
+    check_can_pass = check_can_pass,
+    visited = {},
+    spot_q = {}
   }
 
-  obj.expand_next_spot = function()
-    local next_spot = spot_q[#spot_q]
-    spot_q[#spot_q] = nil
-    local x = next_spot.path[#next_spot.path][1]
-    local y = next_spot.path[#next_spot.path][2]
-    local res = false
-    res = res or add_spot(next_spot, x-1, y)
-    res = res or add_spot(next_spot, x+1, y)
-    res = res or add_spot(next_spot, x, y-1)
-    res = res or add_spot(next_spot, x, y+1)
-
-    obj.path = next_spot.path
-
-    return res
-  end
-
-  -- while not expand_next_spot() do
-  -- end
-
-  obj.expand_next_spot()
+  add_spot(obj, {path={}}, sx, sy)
+  expand_next_spot(obj)
 
   return obj
 end
 
+function find_path(sx,sy,fx,fy,max_length,check_can_pass)
+  local obj = make_pathfinding(sx,sy,fx,fy,check_can_pass)
+  obj.max_length = max_length
+
+  local is_done = false
+  while not is_done do
+    is_done = expand_next_spot(pf)
+  end
+
+  return obj.path
+end
+
 -- end lib
 
-local sx,sy,fx,fy,x,y
-for x = 0,15 do
-  for y = 0,15 do
-    if fget(mget(x,y), 1) then
-      sx = x
-      sy = y
-    elseif fget(mget(x,y), 2) then
-      fx = x
-      fy = y
+local pf
+
+function _init()
+  local sx,sy,fx,fy,x,y
+  for x = 0,15 do
+    for y = 0,15 do
+      if fget(mget(x,y), 1) then
+        sx = x
+        sy = y
+      elseif fget(mget(x,y), 2) then
+        fx = x
+        fy = y
+      end
     end
   end
-end
 
-local check_can_pass = function(x,y)
-  return not fget(mget(x,y), 0)
-end
+  local check_can_pass = function(x,y)
+    return not fget(mget(x,y), 0)
+  end
 
-pf = make_pathfinding(sx,sy,fx,fy,check_can_pass)
+  pf = make_pathfinding(sx,sy,fx,fy,check_can_pass)
+end
 
 function _draw()
   cls()
@@ -131,9 +142,14 @@ function _draw()
 end
 
 is_done=false
+delay=0
 function _update()
   if not is_done then
-    is_done = pf.expand_next_spot()
+    delay+=1
+    if delay > 5 then
+      delay=0
+      is_done = expand_next_spot(pf)
+    end
   end
 end
 
