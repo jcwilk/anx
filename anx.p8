@@ -790,6 +790,47 @@ makemobile = (function()
   end
  end
 
+ local function follow_path(mob)
+  local m_to_p=mob.coords-player.coords
+  local distance=m_to_p:tomagnitude()
+  if distance < 1.8 then
+   if abs(mob:turn_towards(player)) < .1 then
+    mob:talk()
+   end
+  end
+
+  if (not mob.path or mob.path_index > #mob.path) and distance < 4 then
+   local check_can_pass = function(x,y)
+    return not ( is_sprite_wall(mget(x,y)) and is_sprite_wall_solid(mget(x,y)) )
+   end
+
+   --(sx,sy,fx,fy,max_length,check_can_pass)
+   mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),false,check_can_pass)
+   mob.path_index = 1
+   debugmob = mob
+   --blah()
+  end
+
+  if mob.path and #mob.path > 0 and mob.path_index <= #mob.path then
+   local next_path = mob.path[mob.path_index]
+   if next_path then
+    local next_coords = makevec2d(next_path[1],-next_path[2])
+
+    if (mob.coords-next_coords):tomagnitude() < .05 then
+     mob.path_index += 1
+     next_path = mob.path[mob.path_index]
+     if next_path then
+      next_coords = makevec2d(next_path[1],-next_path[2]) --todo - less copypasta
+     end
+    end
+
+    if next_path and abs(mob:turn_towards( {coords=next_coords} )) < .1 then
+     mob:apply_movement((mob.coords-next_coords):normalize()*-.04)
+    end
+   end
+  end
+ end
+
  return function(sprite_id,coords,bearing)
   mob_id_counter+=1
   local obj = {
@@ -804,7 +845,7 @@ makemobile = (function()
    apply_movement=apply_movement,
    entering_door=false,
    hitbox_radius=mob_hitbox_radius,
-   update=default_update
+   update=follow_path--default_update
   }
   return obj
  end
@@ -882,6 +923,130 @@ makeclerk = (function()
   return obj
  end
 end)()
+
+-- end ext
+
+-- start ext ./pathfinding.p8
+
+add_spot = function(obj, old_spot, newx, newy, added_distance)
+ if newx == obj.fx and newy == obj.fy then
+  return true --we found the target!
+ elseif obj.max_length and obj.max_length <= #old_spot.path then
+  return false
+ elseif not obj.check_can_pass(newx,newy) then
+  return false --skip it, it's a wall
+ end
+
+ local distance_so_far = old_spot.distance_so_far + added_distance
+
+ --skip adding the spot if the spot has already been added by another path which was at least as direct
+ --.001 as a float rounding error catchall
+ if obj.visited[newx] and obj.visited[newx][newy] and obj.visited[newx][newy] < distance_so_far + .001 then
+  return false --skip it, we've seen it
+ end
+
+ if not obj.visited[newx] then
+  obj.visited[newx] = {}
+ end
+ obj.visited[newx][newy] = distance_so_far
+
+ -- shallow copy the previous path into a new path and append the new coords to the end
+ local new_path = {}
+ for s in all(old_spot.path) do
+  add(new_path,s)
+ end
+ add(new_path,{newx,newy})
+
+ local distance = distance_so_far + sqrt((newx - obj.fx)^2 + (newy - obj.fy)^2)
+ local insert_index = 1
+
+ while insert_index <= #obj.spot_q and distance <= obj.spot_q[insert_index].distance do
+  insert_index+= 1
+ end
+
+ local tmp = {path=new_path,distance=distance,distance_so_far=distance_so_far}
+ local swap
+ while insert_index <= #obj.spot_q do
+  swap = obj.spot_q[insert_index]
+  obj.spot_q[insert_index] = tmp
+  tmp = swap
+  insert_index+=1
+ end
+
+ add(obj.spot_q,tmp)
+ return false
+end
+
+local expand_next_spot = function(obj)
+ if #obj.spot_q == 0 then
+  obj.path = {path={}}
+  return true
+ end
+ local next_spot = obj.spot_q[#obj.spot_q]
+ obj.spot_q[#obj.spot_q] = nil
+
+ local x = next_spot.path[#next_spot.path][1]
+ local y = next_spot.path[#next_spot.path][2]
+
+ local res = false
+
+ -- do up,down,left,right with added_distance = 1
+ res = res or add_spot(obj, next_spot, x-1, y, 1)
+ res = res or add_spot(obj, next_spot, x+1, y, 1)
+ res = res or add_spot(obj, next_spot, x, y-1, 1)
+ res = res or add_spot(obj, next_spot, x, y+1, 1)
+
+ -- do the diagonals with added_distance = sqrt(1^2+1^2)
+ if obj.check_can_pass(x-1, y) then
+  if obj.check_can_pass(x, y+1) then
+   res = res or add_spot(obj, next_spot, x-1, y+1, 1.41421)
+  end
+  if obj.check_can_pass(x, y-1) then
+   res = res or add_spot(obj, next_spot, x-1, y-1, 1.41421)
+  end
+ end
+ if obj.check_can_pass(x+1, y) then
+  if obj.check_can_pass(x, y+1) then
+   res = res or add_spot(obj, next_spot, x+1, y+1, 1.41421)
+  end
+  if obj.check_can_pass(x, y-1) then
+   res = res or add_spot(obj, next_spot, x+1, y-1, 1.41421)
+  end
+ end
+
+ obj.path = next_spot.path --this is mostly for debugging
+
+ return res
+end
+
+function make_pathfinding(sx,sy,fx,fy,check_can_pass)
+ local obj = {
+  path = {},
+  max_length = false,
+  fx = fx,
+  fy = fy,
+  check_can_pass = check_can_pass,
+  visited = {},
+  spot_q = {}
+ }
+
+ add_spot(obj, {path={}, distance_so_far=0}, sx, sy, 0)
+ expand_next_spot(obj, check_can_pass)
+
+ return obj
+end
+
+function find_path(sx,sy,fx,fy,max_length,check_can_pass)
+ local obj = make_pathfinding(sx,sy,fx,fy,check_can_pass)
+ obj.max_length = max_length
+
+ local is_done = false
+ while not is_done do
+  is_done = expand_next_spot(obj)
+ end
+
+ return obj.path
+end
 
 -- end ext
 

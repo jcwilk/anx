@@ -790,6 +790,47 @@ makemobile = (function()
     end
   end
 
+  local function follow_path(mob)
+    local m_to_p=mob.coords-player.coords
+    local distance=m_to_p:tomagnitude()
+    if distance < 1.8 then
+      if abs(mob:turn_towards(player)) < .1 then
+        mob:talk()
+      end
+    end
+
+    if (not mob.path or mob.path_index > #mob.path) and distance < 4 then
+      local check_can_pass = function(x,y)
+        return not ( is_sprite_wall(mget(x,y)) and is_sprite_wall_solid(mget(x,y)) )
+      end
+
+      --(sx,sy,fx,fy,max_length,check_can_pass)
+      mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),false,check_can_pass)
+      mob.path_index = 1
+      debugmob = mob
+      --blah()
+    end
+
+    if mob.path and #mob.path > 0 and mob.path_index <= #mob.path then
+      local next_path = mob.path[mob.path_index]
+      if next_path then
+        local next_coords = makevec2d(next_path[1],-next_path[2])
+
+        if (mob.coords-next_coords):tomagnitude() < .05 then
+          mob.path_index += 1
+          next_path = mob.path[mob.path_index]
+          if next_path then
+            next_coords = makevec2d(next_path[1],-next_path[2]) --todo - less copypasta
+          end
+        end
+
+        if next_path and abs(mob:turn_towards( {coords=next_coords} )) < .1 then
+          mob:apply_movement((mob.coords-next_coords):normalize()*-.04)
+        end
+      end
+    end
+  end
+
   return function(sprite_id,coords,bearing)
     mob_id_counter+=1
     local obj = {
@@ -804,7 +845,7 @@ makemobile = (function()
       apply_movement=apply_movement,
       entering_door=false,
       hitbox_radius=mob_hitbox_radius,
-      update=default_update
+      update=follow_path--default_update
     }
     return obj
   end

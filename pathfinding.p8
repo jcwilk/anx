@@ -4,21 +4,27 @@ __lua__
 
 -- start lib
 
-add_spot = function(obj, old_spot, newx, newy)
+add_spot = function(obj, old_spot, newx, newy, added_distance)
   if newx == obj.fx and newy == obj.fy then
     return true --we found the target!
   elseif obj.max_length and obj.max_length <= #old_spot.path then
     return false
   elseif not obj.check_can_pass(newx,newy) then
     return false --skip it, it's a wall
-  elseif obj.visited[newx] and obj.visited[newx][newy] then
+  end
+
+  local distance_so_far = old_spot.distance_so_far + added_distance
+
+  --skip adding the spot if the spot has already been added by another path which was at least as direct
+  --.001 as a float rounding error catchall
+  if obj.visited[newx] and obj.visited[newx][newy] and obj.visited[newx][newy] < distance_so_far + .001 then
     return false --skip it, we've seen it
   end
 
   if not obj.visited[newx] then
     obj.visited[newx] = {}
   end
-  obj.visited[newx][newy] = true
+  obj.visited[newx][newy] = distance_so_far
 
   -- shallow copy the previous path into a new path and append the new coords to the end
   local new_path = {}
@@ -27,15 +33,14 @@ add_spot = function(obj, old_spot, newx, newy)
   end
   add(new_path,{newx,newy})
 
-  -- insert the new spot in place and shuffle the remaining ones further out to make room
-  local distance = #new_path + abs(newx - obj.fx) + abs(newy - obj.fy)
+  local distance = distance_so_far + sqrt((newx - obj.fx)^2 + (newy - obj.fy)^2)
   local insert_index = 1
 
   while insert_index <= #obj.spot_q and distance <= obj.spot_q[insert_index].distance do
     insert_index+= 1
   end
 
-  local tmp = {path=new_path,distance=distance}
+  local tmp = {path=new_path,distance=distance,distance_so_far=distance_so_far}
   local swap
   while insert_index <= #obj.spot_q do
     swap = obj.spot_q[insert_index]
@@ -55,15 +60,37 @@ local expand_next_spot = function(obj)
   end
   local next_spot = obj.spot_q[#obj.spot_q]
   obj.spot_q[#obj.spot_q] = nil
+
   local x = next_spot.path[#next_spot.path][1]
   local y = next_spot.path[#next_spot.path][2]
-  local res = false
-  res = res or add_spot(obj, next_spot, x-1, y)
-  res = res or add_spot(obj, next_spot, x+1, y)
-  res = res or add_spot(obj, next_spot, x, y-1)
-  res = res or add_spot(obj, next_spot, x, y+1)
 
-  obj.path = next_spot.path
+  local res = false
+
+  -- do up,down,left,right with added_distance = 1
+  res = res or add_spot(obj, next_spot, x-1, y, 1)
+  res = res or add_spot(obj, next_spot, x+1, y, 1)
+  res = res or add_spot(obj, next_spot, x, y-1, 1)
+  res = res or add_spot(obj, next_spot, x, y+1, 1)
+
+  -- do the diagonals with added_distance = sqrt(1^2+1^2)
+  if obj.check_can_pass(x-1, y) then
+    if obj.check_can_pass(x, y+1) then
+      res = res or add_spot(obj, next_spot, x-1, y+1, 1.41421)
+    end
+    if obj.check_can_pass(x, y-1) then
+      res = res or add_spot(obj, next_spot, x-1, y-1, 1.41421)
+    end
+  end
+  if obj.check_can_pass(x+1, y) then
+    if obj.check_can_pass(x, y+1) then
+      res = res or add_spot(obj, next_spot, x+1, y+1, 1.41421)
+    end
+    if obj.check_can_pass(x, y-1) then
+      res = res or add_spot(obj, next_spot, x+1, y-1, 1.41421)
+    end
+  end
+
+  obj.path = next_spot.path --this is mostly for debugging
 
   return res
 end
@@ -79,8 +106,8 @@ function make_pathfinding(sx,sy,fx,fy,check_can_pass)
     spot_q = {}
   }
 
-  add_spot(obj, {path={}}, sx, sy)
-  expand_next_spot(obj)
+  add_spot(obj, {path={}, distance_so_far=0}, sx, sy, 0)
+  expand_next_spot(obj, check_can_pass)
 
   return obj
 end
@@ -91,7 +118,7 @@ function find_path(sx,sy,fx,fy,max_length,check_can_pass)
 
   local is_done = false
   while not is_done do
-    is_done = expand_next_spot(pf)
+    is_done = expand_next_spot(obj)
   end
 
   return obj.path
@@ -99,7 +126,7 @@ end
 
 -- end lib
 
-local pf
+pf = nil
 
 function _init()
   local sx,sy,fx,fy,x,y
@@ -154,14 +181,14 @@ function _update()
 end
 
 __gfx__
-00000000aaa2aaaa00bbbbb00000000000099000000c100000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000009992a99900b333b30888888000900900000c100000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000009992a99900b300030822222200000900000c100000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000aaa2aaaa00bbbbb00000000000099000d00c100d00000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000009992a99900b333b308888880009009000d0c10d000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000009992a99900b30003082222220000090000dc1d0000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000002222022200bbbb000820000000009000cccccccc00000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000aaaaaaa200333b300888000000090000111c111100000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000a99999920b000b300822200000000000000c100000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000a99999920bbbbb300820000000090000000c100000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000002222222003333300020000000000000000c100000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000a99999920b000b30082220000000000000dc1d0000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000a99999920bbbbb3008200000000900000d0c10d000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000002222222003333300020000000000000d00c100d00000000000000000000000000000000000000000000000000000000000000000000000000000000
 __label__
 0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc0ccccccc
 c111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111cc111111c
