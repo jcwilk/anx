@@ -793,42 +793,71 @@ makemobile = (function()
  local function follow_path(mob)
   local m_to_p=mob.coords-player.coords
   local distance=m_to_p:tomagnitude()
-  if distance < 1.8 then
-   if abs(mob:turn_towards(player)) < .1 then
-    mob:talk()
-   end
-  end
 
-  if (not mob.path or mob.path_index > #mob.path) and distance < 4 then
+  local reset_mob_path = function()
    local check_can_pass = function(x,y)
     return not ( is_sprite_wall(mget(x,y)) and is_sprite_wall_solid(mget(x,y)) )
    end
 
    --(sx,sy,fx,fy,max_length,check_can_pass)
-   mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),false,check_can_pass)
+   mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),15,check_can_pass)
    mob.path_index = 1
-   debugmob = mob
-   --blah()
+   --debugmob = mob
+   -- printh("PATH size "..#mob.path)
+   -- for v in all(mob.path) do
+   --   printh("x"..v[1])
+   --   printh("y"..v[2])
+   --   printh("------")
+   -- end
   end
 
-  if mob.path and #mob.path > 0 and mob.path_index <= #mob.path then
-   local next_path = mob.path[mob.path_index]
-   if next_path then
-    local next_coords = makevec2d(next_path[1],-next_path[2])
+  if (not mob.path or mob.path_index > #mob.path) and distance < 4 then
+   reset_mob_path()
+  end
 
-    if (mob.coords-next_coords):tomagnitude() < .05 then
-     mob.path_index += 1
-     next_path = mob.path[mob.path_index]
-     if next_path then
-      next_coords = makevec2d(next_path[1],-next_path[2]) --todo - less copypasta
-     end
+  local get_next_coords = function()
+   if mob.path and #mob.path > 0 and mob.path_index <= #mob.path then
+    local next_path = mob.path[mob.path_index]
+    if next_path then
+     return makevec2d(next_path[1],-next_path[2])
     end
+   end
 
-    if next_path and abs(mob:turn_towards( {coords=next_coords} )) < .1 then
-     mob:apply_movement((mob.coords-next_coords):normalize()*-.04)
+   return false
+  end
+
+  local next_coords = get_next_coords()
+
+  local is_turning = false
+
+  if distance < 1.8 then
+   is_turning = true
+
+   if abs(mob:turn_towards(player)) < .1 then
+    mob:talk()
+   end
+  end
+
+  if next_coords then
+   if (mob.coords-next_coords):tomagnitude() < .05 then
+    if distance < 4 then
+     reset_mob_path()
+    end
+    mob.path_index += 1 --skip 1 even if we reset because the first spot is where we already are
+    next_coords = get_next_coords()
+   end
+
+   if next_coords then
+    --if abs(mob:turn_towards( {coords=next_coords} )) < .1 then
+    mob:apply_movement((mob.coords-next_coords):normalize()*-.04)
+
+    if not is_turning then
+     mob:turn_towards( {coords=next_coords} )
     end
    end
   end
+
+
  end
 
  return function(sprite_id,coords,bearing)
@@ -1031,7 +1060,7 @@ function make_pathfinding(sx,sy,fx,fy,check_can_pass)
  }
 
  add_spot(obj, {path={}, distance_so_far=0}, sx, sy, 0)
- expand_next_spot(obj, check_can_pass)
+ obj.is_done = expand_next_spot(obj, check_can_pass)
 
  return obj
 end
@@ -1041,8 +1070,8 @@ function find_path(sx,sy,fx,fy,max_length,check_can_pass)
  obj.max_length = max_length
 
  local is_done = false
- while not is_done do
-  is_done = expand_next_spot(obj)
+ while not obj.is_done do
+  obj.is_done = expand_next_spot(obj)
  end
 
  return obj.path
