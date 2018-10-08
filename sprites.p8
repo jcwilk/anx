@@ -856,13 +856,18 @@ makemobile = (function()
         end
       end
     end
+  end
 
-
+  local function reset_position(mob)
+    mob.coords = mob.orig_coords
+    mob.bearing = mob.orig_bearing
   end
 
   return function(sprite_id,coords,bearing)
     mob_id_counter+=1
     local obj = {
+      orig_coords=coords,
+      orig_bearing=bearing,
       id=mob_id_counter,
       sprite_id=sprite_id,
       coords=coords,
@@ -874,6 +879,7 @@ makemobile = (function()
       apply_movement=apply_movement,
       entering_door=false,
       hitbox_radius=mob_hitbox_radius,
+      reset_position=reset_position,
       update=follow_path--default_update
     }
     return obj

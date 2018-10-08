@@ -1,22 +1,16 @@
 -- START LIB
 function _init()
   orig_field_of_view=1/6
-  field_of_view=orig_field_of_view -- 45*
   orig_draw_distance=10
-  draw_distance=orig_draw_distance
   orig_height_ratio=.6
-  height_ratio=orig_height_ratio
   distance_from_player_cutoff=.4
   mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
   height_scale=20 -- multiplier for something at distance of one after dividing by field of view
   orig_turn_amount=.01
-  turn_amount=orig_turn_amount
   orig_speed = .1
-  speed = orig_speed
   max_anxiety = 40
-  is_panic_attack = false
-  panic_attack_duration = 30
-  panic_attack_remaining = panic_attack_duration
+  panic_attack_duration = 300
+  panic_attack_remaining = panic_attack_duration --this gets overwritten anyways
 
   --debug stuff, disable for release
   force_draw_width=false
@@ -31,7 +25,7 @@ function _init()
 
   mobile_pool = make_pool()
   wall_pool = make_pool()
-  player =makeplayer(false,makevec2d(10.369,-33.525),makeangle(.6601))
+  player = makeplayer(false,makevec2d(10.369,-33.525),makeangle(.6601))
 
   for x=0,127 do
     for y=0,63 do
@@ -64,6 +58,28 @@ function _init()
     end
   end)
 
+  menuitem(4, "respawn", respawn)
+
+  coin_count=0
+  has_whisky=false
+  making_payment=false
+  paid_for_whisky = false
+  payment_progress = 0
+
+  mob_pos_map={}
+
+  respawn()
+end
+
+function respawn()
+  --todo fix whisky
+  field_of_view=orig_field_of_view -- 45*
+  draw_distance=orig_draw_distance
+  height_ratio=orig_height_ratio
+  turn_amount=orig_turn_amount
+  speed = orig_speed
+  is_panic_attack = false
+
   current_anxiety=0
   anxiety_recover_cooldown=0
   player_bearing_v=0
@@ -72,25 +88,35 @@ function _init()
   max_anxiety_diff = .3
   is_panic_anxiety_flash=false
 
-  coin_count=0
-  has_whisky=false
-  making_payment=false
-  paid_for_whisky = false
-  payment_progress = 0
-
   popup_duration = 0
   popup_text = ""
   popup_color = 8
   popup_blinking = false
 
-  mob_pos_map={}
   sky_color=1
   ground_color=0
   fog_color=0
-end
 
-function respawn()
+  mobile_pool:each(function(m)
+    m:reset_position()
+  end)
 
+  player:reset_position()
+
+  if has_unpaid_whisky() then
+    for x=0,127 do
+      for y=0,63 do
+        mob_id=mget(x,y)
+        if is_sprite_mob(mob_id) then
+          if mob_id == 16 then
+            mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
+          end
+        end
+      end
+    end
+
+    has_whisky = false
+  end
 end
 
 function draw_debug()
@@ -363,6 +389,7 @@ function tick_anxiety()
 
       if panic_attack_remaining <= 0 then
         respawn()
+        popup("yOU BLACKED OUT!",150,8)
         return
       end
     end
