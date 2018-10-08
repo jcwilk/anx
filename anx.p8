@@ -1080,27 +1080,99 @@ end
 -- end ext
 
 -- start ext ./main.lua
-orig_field_of_view=1/6
-field_of_view=orig_field_of_view -- 45*
-orig_draw_distance=10
-draw_distance=orig_draw_distance
-orig_height_ratio=.6
-height_ratio=orig_height_ratio
-distance_from_player_cutoff=.4
-mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
-height_scale=20 -- multiplier for something at distance of one after dividing by field of view
-orig_turn_amount=.01
-turn_amount=orig_turn_amount
-orig_speed = .1
-speed = orig_speed
-max_anxiety = 40
+function _init()
+ orig_field_of_view=1/6
+ field_of_view=orig_field_of_view -- 45*
+ orig_draw_distance=10
+ draw_distance=orig_draw_distance
+ orig_height_ratio=.6
+ height_ratio=orig_height_ratio
+ distance_from_player_cutoff=.4
+ mob_hitbox_radius=.45 -- this should be less than .5 but more than distance_from_player_cutoff
+ height_scale=20 -- multiplier for something at distance of one after dividing by field of view
+ orig_turn_amount=.01
+ turn_amount=orig_turn_amount
+ orig_speed = .1
+ speed = orig_speed
+ max_anxiety = 40
+ is_panic_attack = false
+ panic_attack_duration = 30
+ panic_attack_remaining = panic_attack_duration
 
---debug stuff, disable for release
-force_draw_width=false
-skip_update=false
-skip_draw=false
-debug=false
---
+ --debug stuff, disable for release
+ force_draw_width=false
+ skip_update=false
+ skip_draw=false
+ debug=false
+ --
+
+ largest_width=0
+ max_screenx_offset=0
+ skipped_columns=0
+
+ mobile_pool = make_pool()
+ wall_pool = make_pool()
+ player =makeplayer(false,makevec2d(10.369,-33.525),makeangle(.6601))
+
+ for x=0,127 do
+  for y=0,63 do
+   mob_id=mget(x,y)
+   if is_sprite_mob(mob_id) then
+    if mob_id == 17 then
+     mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
+    elseif mob_id == 16 then
+     mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
+    elseif mob_id == 41 then
+     mobile_pool.make(makeclerk(mob_id,makevec2d(x,-y),makeangle(rnd())))
+    else
+     mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
+    end
+   end
+  end
+ end
+
+ reverse_strafe=false
+ menuitem(1, "reverse strafe", function()
+  reverse_strafe = not reverse_strafe
+ end)
+
+ --debug=true
+ menuitem(3, "debug", function()
+  if debug then
+   debug = false
+  else
+   debug = true
+  end
+ end)
+
+ current_anxiety=0
+ anxiety_recover_cooldown=0
+ player_bearing_v=0
+ walking_step=0
+ visual_anxiety = current_anxiety
+ max_anxiety_diff = .3
+ is_panic_anxiety_flash=false
+
+ coin_count=0
+ has_whisky=false
+ making_payment=false
+ paid_for_whisky = false
+ payment_progress = 0
+
+ popup_duration = 0
+ popup_text = ""
+ popup_color = 8
+ popup_blinking = false
+
+ mob_pos_map={}
+ sky_color=1
+ ground_color=0
+ fog_color=0
+end
+
+function respawn()
+
+end
 
 function draw_debug()
  color(12)
@@ -1193,9 +1265,6 @@ function cache_wall_col(x,y,face_index)
  return wall_cache[face_index][x][y]
 end
 
-largest_width=0
-max_screenx_offset=0
-skipped_columns=0
 function raycast_walls()
  local pv
  local slope
@@ -1367,47 +1436,16 @@ function raycast_walls()
  end
 end
 
-mobile_pool = make_pool()
-wall_pool = make_pool()
-player =makeplayer(false,makevec2d(10.369,-33.525),makeangle(.6601))
-
-for x=0,127 do
- for y=0,63 do
-  mob_id=mget(x,y)
-  if is_sprite_mob(mob_id) then
-   if mob_id == 17 then
-    mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
-   elseif mob_id == 16 then
-    mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
-   elseif mob_id == 41 then
-    mobile_pool.make(makeclerk(mob_id,makevec2d(x,-y),makeangle(rnd())))
-   else
-    mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
-   end
-  end
- end
-end
-
-reverse_strafe=false
-menuitem(1, "reverse strafe", function()
- reverse_strafe = not reverse_strafe
-end)
-
---debug=true
-menuitem(3, "debug", function()
- if debug then
-  debug = false
- else
-  debug = true
- end
-end)
-
-current_anxiety=0
-anxiety_recover_cooldown=0
 function tick_anxiety()
  if anxiety_recover_cooldown > 0 then
   if is_panic_attack then
    popup("!panic attack!",2,8)
+   panic_attack_remaining -= 1
+
+   if panic_attack_remaining <= 0 then
+    respawn()
+    return
+   end
   end
 
   anxiety_recover_cooldown -= 1/30
@@ -1422,7 +1460,6 @@ function tick_anxiety()
  end
 end
 
-player_bearing_v=0
 function tick_bearing_v()
  if abs(player_bearing_v) > .0005 then
   player_bearing_v-= tounit(player_bearing_v)*.0005
@@ -1430,14 +1467,11 @@ function tick_bearing_v()
  end
 end
 
-walking_step=0
 function tick_walking()
  walking_step+=.05
  if walking_step >= 1 then walking_step=0 end
 end
 
-visual_anxiety = current_anxiety
-max_anxiety_diff = .3
 function recalc_settings()
  -- if current_anxiety == 0 and visual_anxiety == 0 then
  --   if ran_one_last_time then
@@ -1477,6 +1511,7 @@ function add_anxiety()
 
   if not is_panic_attack then
    reset_anxiety_offsets()
+   panic_attack_remaining = panic_attack_duration
   end
 
   is_panic_attack = true
@@ -1583,7 +1618,6 @@ function draw_background()
  draw_stars()
 end
 
-is_panic_anxiety_flash=false
 function draw_anxiety_bar()
  rectfill(54,1,126,6,0)
  rectfill(83,2,125,5,1)
@@ -1614,7 +1648,6 @@ function draw_anxiety_bar()
  print("ANXIETY",55,1,anxiety_color)
 end
 
-coin_count=0
 function add_coin()
  popup("fOUND A COIN!",30,10,true)
  coin_count+=1
@@ -1624,7 +1657,6 @@ function clear_coins()
  coin_count=0
 end
 
-has_whisky=false
 function add_whisky()
  popup("pICKED UP WHISKY!",30,9,true)
  has_whisky=true
@@ -1646,7 +1678,6 @@ function fail_enter_house()
  popup("byob! nO FREELOADERS!",30,9)
 end
 
-making_payment=false
 function make_payment()
  if has_unpaid_whisky() then
   popup("pAYING FOR WHISKY...",10,11)
@@ -1654,8 +1685,6 @@ function make_payment()
  end
 end
 
-paid_for_whisky = false
-payment_progress = 0
 function update_inventory()
  if making_payment then
   payment_progress+=.005
@@ -1671,10 +1700,6 @@ function update_inventory()
  making_payment = false
 end
 
-popup_duration = 0
-popup_text = ""
-popup_color = 8
-popup_blinking = false
 function popup(text,duration,colr,blinking)
  popup_duration = duration
  popup_text = text
@@ -1728,10 +1753,6 @@ function draw_inventory()
  end
 end
 
-mob_pos_map={}
-sky_color=1
-ground_color=0
-fog_color=0
 function _draw()
  draw_start_time = stat(1)
  if (skip_draw) then
