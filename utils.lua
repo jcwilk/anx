@@ -220,6 +220,15 @@ makeangle = (function()
   end
 end)()
 
+-- makedelays = function(max_ticks)
+--   local function process()
+--   end
+
+--   local function make(fn, delay)
+--     delay = mid(1,delay,max_ticks)
+--   end
+-- end
+
 function angle_to_screenx(angle)
   local offset_from_center_of_screen = -sin(angle.val-player.bearing.val)
   local screen_width = -sin(field_of_view/2) * 2
@@ -230,5 +239,13 @@ function screenx_to_angle(screenx)
   local screen_width = -sin(field_of_view/2) * 2
   local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
   return makeangle(player.bearing.val+atan2(offset_from_center_of_screen, 1)+1/4)
+end
+
+function mapget(x,y)
+  if y >= 32 then
+    x+= 64
+    y-= 32
+  end
+  return mget(x,y)
 end
 -- END LIB

@@ -237,6 +237,14 @@ function screenx_to_angle(screenx)
  local offset_from_center_of_screen = (screenx - 127/2) * screen_width/128
  return makeangle(player.bearing.val+atan2(offset_from_center_of_screen, 1)+1/4)
 end
+
+function mapget(x,y)
+ if y >= 32 then
+  x+= 64
+  y-= 32
+ end
+ return mget(x,y)
+end
 -- end ext
 
 -- START LIB
@@ -728,9 +736,9 @@ makemobile = (function()
 
     for curr_cross=round(cross-mob.hitbox_radius),round(cross+mob.hitbox_radius) do
       if axis=='x' then
-        sprite_id = mget(curr_axis,-curr_cross)
+        sprite_id = mapget(curr_axis,-curr_cross)
       else
-        sprite_id = mget(curr_cross,-curr_axis)
+        sprite_id = mapget(curr_cross,-curr_axis)
       end
       if is_sprite_wall(sprite_id) and is_sprite_wall_solid(sprite_id) then
         return orig
@@ -760,7 +768,7 @@ makemobile = (function()
     x=filter_axis(mob,'x',movement.x)
     y=filter_axis(mob,'y',movement.y)
 
-    local proposed_tile_id=mget(round(x+tounit(movement.x)*mob.hitbox_radius), -round(y+tounit(movement.y)*mob.hitbox_radius))
+    local proposed_tile_id=mapget(round(x+tounit(movement.x)*mob.hitbox_radius), -round(y+tounit(movement.y)*mob.hitbox_radius))
 
     -- workaround for getting stuck on the corner
     if is_sprite_wall(proposed_tile_id) and is_sprite_wall_solid(proposed_tile_id) then
@@ -796,11 +804,11 @@ makemobile = (function()
 
     local reset_mob_path = function()
       local check_can_pass = function(x,y)
-        return not ( is_sprite_wall(mget(x,y)) and is_sprite_wall_solid(mget(x,y)) )
+        return not ( is_sprite_wall(mapget(x,y)) and is_sprite_wall_solid(mapget(x,y)) )
       end
 
       --(sx,sy,fx,fy,max_length,check_can_pass)
-      mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),15,check_can_pass)
+      mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),8,check_can_pass)
       mob.path_index = 1
       --debugmob = mob
       -- printh("PATH size "..#mob.path)

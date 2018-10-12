@@ -25,11 +25,11 @@ function _init()
 
   mobile_pool = make_pool()
   wall_pool = make_pool()
-  player = makeplayer(false,makevec2d(10.369,-33.525),makeangle(.6601))
+  player = makeplayer(false,makevec2d(31,-31),makeangle(0))
 
   for x=0,127 do
     for y=0,63 do
-      mob_id=mget(x,y)
+      mob_id=mapget(x,y)
       if is_sprite_mob(mob_id) then
         if mob_id == 17 then
           mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
@@ -106,7 +106,7 @@ function respawn()
   if has_unpaid_whisky() then
     for x=0,127 do
       for y=0,63 do
-        mob_id=mget(x,y)
+        mob_id=mapget(x,y)
         if is_sprite_mob(mob_id) then
           if mob_id == 16 then
             mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
@@ -305,7 +305,7 @@ function raycast_walls()
         found=true
         draw_far_fog = true
       else
-        sprite_id=mget(currx,-curry)
+        sprite_id=mapget(currx,-curry)
         if is_sprite_wall(sprite_id) then
           if not is_sprite_wall_transparent(sprite_id) then
             found=true
@@ -507,7 +507,7 @@ function _update()
 
 
 
-  local curr_tile_sprite_id=mget(round(player.coords.x),round(-player.coords.y))
+  local curr_tile_sprite_id=mapget(round(player.coords.x),round(-player.coords.y))
   if is_sprite_door(curr_tile_sprite_id) then
     need_new_skybox=true
   elseif is_sprite_skybox(curr_tile_sprite_id) then
