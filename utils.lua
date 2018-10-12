@@ -220,14 +220,37 @@ makeangle = (function()
   end
 end)()
 
--- makedelays = function(max_ticks)
---   local function process()
---   end
+makedelays = function(max_ticks)
+  local delay_store_size = max_ticks + 1
+  local tick_index = 1
+  local delay_store = {}
+  for i=1,delay_store_size do
+    delay_store[i] = {}
+  end
 
---   local function make(fn, delay)
---     delay = mid(1,delay,max_ticks)
---   end
--- end
+  local function process()
+    tick_index+= 1
+    if tick_index > delay_store_size then
+      tick_index = 1
+    end
+    for fn in all(delay_store[tick_index]) do
+      fn()
+    end
+    delay_store[tick_index] = {}
+  end
+
+  local function make(fn, delay)
+    delay = mid(1,flr(delay),max_ticks)
+    local delay_to_index = tick_index + delay % delay_store_size
+
+    add(delay_store[delay_to_index], fn)
+  end
+
+  return {
+    process = process,
+    make = make
+  }
+end
 
 function angle_to_screenx(angle)
   local offset_from_center_of_screen = -sin(angle.val-player.bearing.val)

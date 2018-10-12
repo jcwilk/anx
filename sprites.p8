@@ -226,6 +226,38 @@ makeangle = (function()
  end
 end)()
 
+makedelays = function(max_ticks)
+ local delay_store_size = max_ticks + 1
+ local tick_index = 1
+ local delay_store = {}
+ for i=1,delay_store_size do
+  delay_store[i] = {}
+ end
+
+ local function process()
+  tick_index+= 1
+  if tick_index > delay_store_size then
+   tick_index = 1
+  end
+  for fn in all(delay_store[tick_index]) do
+   fn()
+  end
+  delay_store[tick_index] = {}
+ end
+
+ local function make(fn, delay)
+  delay = mid(1,flr(delay),max_ticks)
+  local delay_to_index = tick_index + delay % delay_store_size
+
+  add(delay_store[delay_to_index], fn)
+ end
+
+ return {
+  process = process,
+  make = make
+ }
+end
+
 function angle_to_screenx(angle)
  local offset_from_center_of_screen = -sin(angle.val-player.bearing.val)
  local screen_width = -sin(field_of_view/2) * 2
@@ -817,10 +849,17 @@ makemobile = (function()
       --   printh("y"..v[2])
       --   printh("------")
       -- end
+      return mob.path and #mob.path > 0
     end
 
-    if (not mob.path or mob.path_index > #mob.path) and distance < 4 then
-      reset_mob_path()
+    if (not mob.path or mob.path_index > #mob.path) and distance < 4 and mob.is_pathfinding then
+      if not reset_mob_path() then
+        mob.is_pathfinding = false
+        local deferred = function()
+          mob.is_pathfinding = true
+        end
+        delays.make(deferred, rnd()*30+120)
+      end
     end
 
     local get_next_coords = function()
@@ -888,6 +927,7 @@ makemobile = (function()
       entering_door=false,
       hitbox_radius=mob_hitbox_radius,
       reset_position=reset_position,
+      is_pathfinding=true,
       update=follow_path--default_update
     }
     return obj

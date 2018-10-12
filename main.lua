@@ -72,7 +72,8 @@ function _init()
 end
 
 function respawn()
-  --todo fix whisky
+  delays = makedelays(300) --max of 10 second delay
+
   field_of_view=orig_field_of_view -- 45*
   draw_distance=orig_draw_distance
   height_ratio=orig_height_ratio
@@ -469,6 +470,8 @@ function _update()
   if skip_update then
     return
   end
+  delays.process()
+
   local offset = makevec2d(0,0)
   local facing = player.bearing:tovector()
   local right = makevec2d(facing.y,-facing.x)
