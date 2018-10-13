@@ -858,7 +858,7 @@ makemobile = (function()
     local deferred = function()
      mob.is_pathfinding = true
     end
-    delays.make(deferred, rnd()*30+120)
+    delays.make(deferred, rnd(30)+30) --try again not before 1-2 seconds have passed
    end
   end
 
