@@ -235,14 +235,15 @@ makedelays = function(max_ticks)
     end
     for fn in all(delay_store[tick_index]) do
       fn()
+      --printh(tick_index)
     end
     delay_store[tick_index] = {}
   end
 
   local function make(fn, delay)
     delay = mid(1,flr(delay),max_ticks)
-    local delay_to_index = tick_index + delay % delay_store_size
-
+    local delay_to_index = (tick_index + delay) % delay_store_size
+    --printh(delay_to_index)
     add(delay_store[delay_to_index], fn)
   end
 

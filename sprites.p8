@@ -241,14 +241,15 @@ makedelays = function(max_ticks)
   end
   for fn in all(delay_store[tick_index]) do
    fn()
+   --printh(tick_index)
   end
   delay_store[tick_index] = {}
  end
 
  local function make(fn, delay)
   delay = mid(1,flr(delay),max_ticks)
-  local delay_to_index = tick_index + delay % delay_store_size
-
+  local delay_to_index = (tick_index + delay) % delay_store_size
+  --printh(delay_to_index)
   add(delay_store[delay_to_index], fn)
  end
 
@@ -280,8 +281,9 @@ end
 -- end ext
 
 -- START LIB
-
+debug_marker_id = 45
 cached_sprites={}
+freeze_mobs=false
 
 function minn(a,b)
   if a < b then
@@ -628,22 +630,26 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
       pixel_color=sget(col_i+spritex,row_i+spritey)
       vertical_offset=verticaloffsets[col_i+1]
 
-      if pixel_color == 14 then
-        if face_length <= 0 then
-          if is_panic_attack then
-            pixel_color=8 --red
+      if mob.sprite_id == debug_marker_id and pixel_color > 0 then
+        pixel_color = mob.overwrite_color
+      else
+        if pixel_color == 14 then
+          if face_length <= 0 then
+            if is_panic_attack then
+              pixel_color=8 --red
+            else
+              pixel_color=7
+            end
           else
-            pixel_color=7
+            if is_panic_attack then
+              pixel_color=1
+            else
+              pixel_color=15
+            end
           end
-        else
-          if is_panic_attack then
-            pixel_color=1
-          else
-            pixel_color=15
-          end
+        elseif pixel_color > 0 and is_panic_attack then
+          pixel_color=1
         end
-      elseif pixel_color > 0 and is_panic_attack then
-        pixel_color=1
       end
 
       if pixel_color > 0 and screen_side >= 1 then
@@ -737,7 +743,7 @@ makemobile = (function()
 
   local function turnto(m,target)
     local bearing_diff=((m.coords-target.coords):tobearing()-m.bearing).val-.5
-    m.bearing+=mid(-.01,.01,bearing_diff)
+    m.bearing+=mid(-.02,.02,bearing_diff)
     return bearing_diff
   end
 
@@ -841,14 +847,15 @@ makemobile = (function()
     return false
   end
 
+  local function check_can_pass(mob,x,y)
+    return (not is_other_mob(mob,x,y)) and (( not is_sprite_wall(mapget(x,-y))) or (not is_sprite_wall_solid(mapget(x,-y)) ))
+  end
+
   local function reset_mob_path(mob)
-    local check_can_pass = function(x,y)
-
-      return (not is_other_mob(mob,x,y)) and ( not is_sprite_wall(mapget(x,-y))) or (not is_sprite_wall_solid(mapget(x,-y)) )
-    end
-
     --(sx,sy,fx,fy,max_length,check_can_pass)
-    mob.path = find_path(round(mob.coords.x), round(mob.coords.y), round(player.coords.x), round(player.coords.y),8,check_can_pass)
+    mob.path = find_path(round(mob.coords.x), round(mob.coords.y), round(player.coords.x), round(player.coords.y),8,function(x,y)
+      return check_can_pass(mob,x,y)
+    end)
     mob.path_index = 1
     --debugmob = mob
     -- printh("PATH size "..#mob.path)
@@ -860,11 +867,29 @@ makemobile = (function()
     return mob.path and #mob.path > 0
   end
 
+  local function get_next_coords(mob,offset)
+    offset = offset or 0
+    if mob:is_on_path(offset) then
+      local next_path = mob.path[mob.path_index]
+      if next_path then
+        return makevec2d(next_path[1],next_path[2])
+      end
+    end
+
+    return false
+  end
+
   local function follow_path(mob)
+    if freeze_mobs then
+      return
+    end
+
     local m_to_p=mob.coords-player.coords
     local distance=m_to_p:tomagnitude()
 
-
+    if not mob.is_pathfinding then
+      --printh("waiting"..mob.id)
+    end
 
     if (not mob.path or mob.path_index > #mob.path) and distance < 4 and mob.is_pathfinding then
       if not reset_mob_path(mob) then
@@ -873,21 +898,14 @@ makemobile = (function()
           mob.is_pathfinding = true
         end
         delays.make(deferred, rnd(30)+30) --try again not before 1-2 seconds have passed
+      -- else
+      --   reset_mob_position_maps()
       end
     end
 
-    local get_next_coords = function()
-      if mob.path and #mob.path > 0 and mob.path_index <= #mob.path then
-        local next_path = mob.path[mob.path_index]
-        if next_path then
-          return makevec2d(next_path[1],next_path[2])
-        end
-      end
 
-      return false
-    end
 
-    local next_coords = get_next_coords()
+    local next_coords = mob:next_coords()
 
     local is_turning = false
 
@@ -902,15 +920,16 @@ makemobile = (function()
     if next_coords and distance > 1 then
       if (mob.coords-next_coords):tomagnitude() < .05 then
         if distance < 4 then
-          reset_mob_path(mob)
+          mob:reset_path()
+          --reset_mob_position_maps()
         end
         mob.path_index += 1 --skip 1 even if we reset because the first spot is where we already are
-        next_coords = get_next_coords()
+        next_coords = mob:next_coords()
 
         -- if next_coords and mob.path_index > 2 and is_other_mob(mob,next_coords.x,next_coords.y) then
         --   blah()
         --   --mob.path = false
-        --   reset_mob_path(mob)
+        --   mob:reset_path()
         --   --mob.path_index += 1
         --   return
         -- end
@@ -918,7 +937,7 @@ makemobile = (function()
 
       if next_coords then
         --if abs(mob:turn_towards( {coords=next_coords} )) < .1 then
-        mob:apply_movement((mob.coords-next_coords):normalize()*-.04)
+        mob:apply_movement((mob.coords-next_coords):normalize()*-.08)
 
         if not is_turning then
           mob:turn_towards( {coords=next_coords} )
@@ -931,6 +950,11 @@ makemobile = (function()
     mob.coords = mob.orig_coords
     mob.bearing = mob.orig_bearing
     mob.path = false
+  end
+
+  local function is_on_path(mob, offset)
+    offset = offset or 0
+    return mob.path and mob.path_index and mob.path_index + offset <= #mob.path
   end
 
   return function(sprite_id,coords,bearing)
@@ -951,6 +975,10 @@ makemobile = (function()
       hitbox_radius=mob_hitbox_radius,
       reset_position=reset_position,
       is_pathfinding=true,
+      reset_path=reset_mob_path,
+      next_coords=next_coords,
+      is_on_path=is_on_path,
+      next_coords=get_next_coords,
       update=follow_path--default_update
     }
     return obj
@@ -1026,6 +1054,32 @@ makeclerk = (function()
   return function(sprite_id,coords,bearing)
     local obj=makemobile(sprite_id,coords,bearing)
     obj.update=clerk_update
+    return obj
+  end
+end)()
+
+makepathdebug = (function()
+  local function debug_reset_path(mob)
+    mob:_reset_path()
+    for mindex=1,#mob.markers do
+      mob.markers[mindex].kill()
+    end
+    mob.markers = {}
+
+    local temp
+    for cindex=1,#mob.path do
+      temp = makeitem( debug_marker_id,makevec2d(mob.path[cindex][1],mob.path[cindex][2]),makeangle(0) )
+      temp.overwrite_color = (mob.id % 15) + 1
+      mobile_pool.make(temp)
+      add(mob.markers,temp)
+    end
+  end
+
+  return function(sprite_id,coords,bearing)
+    local obj=makemobile(sprite_id,coords,bearing)
+    obj._reset_path = obj.reset_path
+    obj.reset_path = debug_reset_path
+    obj.markers = make_pool()
     return obj
   end
 end)()

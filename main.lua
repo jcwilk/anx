@@ -37,6 +37,8 @@ function _init()
           mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
         elseif mob_id == 41 then
           mobile_pool.make(makeclerk(mob_id,makevec2d(x,-y),makeangle(rnd())))
+        elseif mob_id == 46 then
+          mobile_pool.make(makepathdebug(mob_id,makevec2d(x,-y),makeangle(rnd())))
         else
           mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
         end
@@ -50,7 +52,7 @@ function _init()
   end)
 
   --debug=true
-  menuitem(3, "debug", function()
+  menuitem(2, "debug", function()
     if debug then
       debug = false
     else
@@ -58,7 +60,21 @@ function _init()
     end
   end)
 
-  menuitem(4, "respawn", respawn)
+  menuitem(3, "respawn", respawn)
+
+  local unfreeze_mobs_menu, freeze_mobs_menu
+
+  function freeze_mobs_menu()
+    freeze_mobs = true
+    menuitem(4, "unfreeze mobs", unfreeze_mobs_menu)
+  end
+
+  function unfreeze_mobs_menu()
+    freeze_mobs = false
+    menuitem(4, "freeze mobs", freeze_mobs_menu)
+  end
+
+  unfreeze_mobs_menu()
 
   coin_count=0
   has_whisky=false
@@ -468,27 +484,39 @@ function add_anxiety()
   anxiety_recover_cooldown = 10
 end
 
+function add_to_map(map,x,y,mob)
+  map[x] = map[x] or {}
+  map[x][y] = map[x][y] or {}
+  add(map[x][y],mob)
+end
+
 function reset_mob_position_maps()
   mob_pos_map={}
   mob_round_map={}
-  local x,y
+  local x,y,next_coords
   mobile_pool:each(function(mob)
     for x=flr(mob.coords.x),ceil(mob.coords.x) do
       for y=flr(mob.coords.y),ceil(mob.coords.y) do
-        mob_pos_map[x] = mob_pos_map[x] or {}
-        mob_pos_map[x][y] = mob_pos_map[x][y] or {}
-        add(mob_pos_map[x][y],mob)
+        add_to_map(mob_pos_map,x,y,mob)
       end
     end
-    x=round(mob.coords.x)
-    y=round(mob.coords.y)
-    if not mob_round_map[x] then
-      mob_round_map[x] = {}
+
+    --pathfinding stuff below
+
+    if mob.sprite_id == debug_marker_id then
+      return
     end
-    if not mob_round_map[x][y] then
-      mob_round_map[x][y] = {}
+
+    if mob:is_on_path() then
+      next_coords = mob:next_coords()
+      add_to_map(mob_round_map,next_coords.x,next_coords.y,mob)
+      next_coords = mob:next_coords(1)
+      if next_coords then
+        add_to_map(mob_round_map,next_coords.x,next_coords.y,mob)
+      end
+    else
+      add_to_map(mob_round_map,round(mob.coords.x),round(mob.coords.y),mob)
     end
-    add(mob_round_map[x][y],mob)
   end)
 end
 
