@@ -909,7 +909,7 @@ makemobile = (function()
 
   local is_turning = false
 
-  if distance < 1.8 then
+  if distance < 1.80 or (distance < 2.8 and next_coords) then
    is_turning = true
 
    if abs(mob:turn_towards(player)) < .1 then
