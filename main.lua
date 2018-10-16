@@ -9,7 +9,7 @@ function _init()
   orig_turn_amount=.01
   orig_speed = .1
   max_anxiety = 40
-  panic_attack_duration = 300
+  panic_attack_duration = 150
   panic_attack_remaining = panic_attack_duration --this gets overwritten anyways
 
   --debug stuff, disable for release
@@ -25,7 +25,7 @@ function _init()
 
   mobile_pool = make_pool()
   wall_pool = make_pool()
-  player = makeplayer(false,makevec2d(31,-31),makeangle(0))
+  player = makeplayer(false,makevec2d(29,-31),makeangle(1/4))
 
   for x=0,127 do
     for y=0,63 do
@@ -65,8 +65,6 @@ function _init()
   making_payment=false
   paid_for_whisky = false
   payment_progress = 0
-
-  mob_pos_map={}
 
   respawn()
 end
@@ -118,6 +116,10 @@ function respawn()
 
     has_whisky = false
   end
+
+  mob_pos_map={}
+  mob_round_map={}
+  reset_mob_position_maps()
 end
 
 function draw_debug()
@@ -466,6 +468,30 @@ function add_anxiety()
   anxiety_recover_cooldown = 10
 end
 
+function reset_mob_position_maps()
+  mob_pos_map={}
+  mob_round_map={}
+  local x,y
+  mobile_pool:each(function(mob)
+    for x=flr(mob.coords.x),ceil(mob.coords.x) do
+      for y=flr(mob.coords.y),ceil(mob.coords.y) do
+        mob_pos_map[x] = mob_pos_map[x] or {}
+        mob_pos_map[x][y] = mob_pos_map[x][y] or {}
+        add(mob_pos_map[x][y],mob)
+      end
+    end
+    x=round(mob.coords.x)
+    y=round(mob.coords.y)
+    if not mob_round_map[x] then
+      mob_round_map[x] = {}
+    end
+    if not mob_round_map[x][y] then
+      mob_round_map[x][y] = {}
+    end
+    add(mob_round_map[x][y],mob)
+  end)
+end
+
 function _update()
   if skip_update then
     return
@@ -517,9 +543,6 @@ function _update()
     set_skybox(curr_tile_sprite_id)
   end
 
-
-
-
   tick_anxiety()
 
   tick_bearing_v()
@@ -538,6 +561,8 @@ function _update()
   update_popup()
 
   update_panic_offsets()
+
+  reset_mob_position_maps()
 end
 
 function draw_stars()
@@ -708,17 +733,6 @@ function _draw()
     cls()
   else
     draw_background()
-
-    mob_pos_map={}
-    mobile_pool:each(function(mob)
-      for x=flr(mob.coords.x),ceil(mob.coords.x) do
-        for y=flr(mob.coords.y),ceil(mob.coords.y) do
-          mob_pos_map[x] = mob_pos_map[x] or {}
-          mob_pos_map[x][y] = mob_pos_map[x][y] or {}
-          add(mob_pos_map[x][y],mob)
-        end
-      end
-    end)
 
     raycast_walls()
 

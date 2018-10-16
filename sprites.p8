@@ -830,30 +830,44 @@ makemobile = (function()
     end
   end
 
+  local function is_other_mob(mob,x,y)
+    if mob_round_map[x] and mob_round_map[x][y] then
+      for mindex=1,#mob_round_map[x][y] do
+        if mob_round_map[x][y][mindex].id != mob.id then
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  local function reset_mob_path(mob)
+    local check_can_pass = function(x,y)
+
+      return (not is_other_mob(mob,x,y)) and ( not is_sprite_wall(mapget(x,-y))) or (not is_sprite_wall_solid(mapget(x,-y)) )
+    end
+
+    --(sx,sy,fx,fy,max_length,check_can_pass)
+    mob.path = find_path(round(mob.coords.x), round(mob.coords.y), round(player.coords.x), round(player.coords.y),8,check_can_pass)
+    mob.path_index = 1
+    --debugmob = mob
+    -- printh("PATH size "..#mob.path)
+    -- for v in all(mob.path) do
+    --   printh("x"..v[1])
+    --   printh("y"..v[2])
+    --   printh("------")
+    -- end
+    return mob.path and #mob.path > 0
+  end
+
   local function follow_path(mob)
     local m_to_p=mob.coords-player.coords
     local distance=m_to_p:tomagnitude()
 
-    local reset_mob_path = function()
-      local check_can_pass = function(x,y)
-        return not ( is_sprite_wall(mapget(x,y)) and is_sprite_wall_solid(mapget(x,y)) )
-      end
 
-      --(sx,sy,fx,fy,max_length,check_can_pass)
-      mob.path = find_path(round(mob.coords.x), -round(mob.coords.y), round(player.coords.x), -round(player.coords.y),8,check_can_pass)
-      mob.path_index = 1
-      --debugmob = mob
-      -- printh("PATH size "..#mob.path)
-      -- for v in all(mob.path) do
-      --   printh("x"..v[1])
-      --   printh("y"..v[2])
-      --   printh("------")
-      -- end
-      return mob.path and #mob.path > 0
-    end
 
     if (not mob.path or mob.path_index > #mob.path) and distance < 4 and mob.is_pathfinding then
-      if not reset_mob_path() then
+      if not reset_mob_path(mob) then
         mob.is_pathfinding = false
         local deferred = function()
           mob.is_pathfinding = true
@@ -866,7 +880,7 @@ makemobile = (function()
       if mob.path and #mob.path > 0 and mob.path_index <= #mob.path then
         local next_path = mob.path[mob.path_index]
         if next_path then
-          return makevec2d(next_path[1],-next_path[2])
+          return makevec2d(next_path[1],next_path[2])
         end
       end
 
@@ -885,13 +899,21 @@ makemobile = (function()
       end
     end
 
-    if next_coords then
+    if next_coords and distance > 1 then
       if (mob.coords-next_coords):tomagnitude() < .05 then
         if distance < 4 then
-          reset_mob_path()
+          reset_mob_path(mob)
         end
         mob.path_index += 1 --skip 1 even if we reset because the first spot is where we already are
         next_coords = get_next_coords()
+
+        -- if next_coords and mob.path_index > 2 and is_other_mob(mob,next_coords.x,next_coords.y) then
+        --   blah()
+        --   --mob.path = false
+        --   reset_mob_path(mob)
+        --   --mob.path_index += 1
+        --   return
+        -- end
       end
 
       if next_coords then
@@ -908,6 +930,7 @@ makemobile = (function()
   local function reset_position(mob)
     mob.coords = mob.orig_coords
     mob.bearing = mob.orig_bearing
+    mob.path = false
   end
 
   return function(sprite_id,coords,bearing)
