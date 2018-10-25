@@ -25,23 +25,13 @@ function _init()
 
   mobile_pool = make_pool()
   wall_pool = make_pool()
-  player = makeplayer(false,makevec2d(29,-31),makeangle(1/4))
+  player = makeplayer(false,makevec2d(39.4567,-30.3974),makeangle(.17))
 
   for x=0,127 do
-    for y=0,63 do
-      mob_id=mapget(x,y)
+    for y=0,-63,-1 do
+      mob_id=mapget(x,-y)
       if is_sprite_mob(mob_id) then
-        if mob_id == 17 then
-          mobile_pool.make(makecoin(mob_id,makevec2d(x,-y),makeangle(rnd())))
-        elseif mob_id == 16 then
-          mobile_pool.make(makewhisky(mob_id,makevec2d(x,-y),makeangle(rnd())))
-        elseif mob_id == 41 then
-          mobile_pool.make(makeclerk(mob_id,makevec2d(x,-y),makeangle(rnd())))
-        elseif mob_id == 46 then
-          mobile_pool.make(makepathdebug(mob_id,makevec2d(x,-y),makeangle(rnd())))
-        else
-          mobile_pool.make(makemobile(mob_id,makevec2d(x,-y),makeangle(rnd())))
-        end
+        mobile_pool.make(make_sprite_by_id(mob_id, x, y))
       end
     end
   end
@@ -77,7 +67,8 @@ function _init()
   unfreeze_mobs_menu()
 
   coin_count=0
-  has_whisky=false
+  has_whisky=true
+  has_key=true
   making_payment=false
   paid_for_whisky = false
   payment_progress = 0
@@ -118,6 +109,7 @@ function respawn()
 
   player:reset_position()
 
+  --this is removing the whisky from their inventory if they haven't paid for it and they black out
   if has_unpaid_whisky() then
     for x=0,127 do
       for y=0,63 do
@@ -659,6 +651,15 @@ function clear_coins()
   coin_count=0
 end
 
+function add_key()
+  popup("rECEIVED HOUSE KEY!",30,12,true)
+  has_key=true
+end
+
+function fail_go_home()
+  popup("nEED THE KEY! gET AT LODGE",30,12)
+end
+
 function add_whisky()
   popup("pICKED UP WHISKY!",30,9,true)
   has_whisky=true
@@ -676,7 +677,7 @@ function has_unpaid_whisky()
   return has_whisky and coin_count > 0
 end
 
-function fail_enter_house()
+function fail_enter_lodge()
   popup("byob! nO FREELOADERS!",30,9)
 end
 
@@ -752,6 +753,9 @@ function draw_inventory()
   end
   if has_whisky then
     spr(16,128-coin_count*9-8,8) -- -8 because the whisky is a little narrow
+  end
+  if has_key then
+    spr(65,113,8) -- -8 because the whisky is a little narrow
   end
 end
 

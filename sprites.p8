@@ -321,8 +321,12 @@ function is_sprite_door(sprite_id)
   return fget(sprite_id,1)
 end
 
-function is_sprite_house_door(sprite_id)
-  return sprite_id == 5 --sprite id of the house door
+function is_sprite_lodge_door(sprite_id)
+  return sprite_id == 5 --sprite id of the lodge door
+end
+
+function is_sprite_home_door(sprite_id)
+  return sprite_id == 64 --sprite id of the home door
 end
 
 function cache_sprite(sprite_id)
@@ -791,8 +795,13 @@ makemobile = (function()
         return orig
       end
 
-      if is_sprite_house_door(sprite_id) and not has_whisky then
-        fail_enter_house()
+      if is_sprite_lodge_door(sprite_id) and not has_whisky then
+        fail_enter_lodge()
+        return orig
+      end
+
+      if is_sprite_home_door(sprite_id) and not has_key then
+        fail_go_home()
         return orig
       end
     end
@@ -1083,6 +1092,31 @@ makepathdebug = (function()
     return obj
   end
 end)()
+
+function makekey(sprite_id,coords,bearing)
+  local obj = makecoin(sprite_id, coords, bearing)
+  obj.on_pickup = function(mob)
+    mob:kill()
+    add_key()
+  end
+  return obj
+end
+
+function make_sprite_by_id(mob_id, x, y)
+  if mob_id == 17 then
+    return makecoin(mob_id,makevec2d(x,y),makeangle(rnd()))
+  elseif mob_id == 16 then
+    return makewhisky(mob_id,makevec2d(x,y),makeangle(rnd()))
+  elseif mob_id == 41 then
+    return makeclerk(mob_id,makevec2d(x,y),makeangle(rnd()))
+  elseif mob_id == 46 then
+    return makepathdebug(mob_id,makevec2d(x,y),makeangle(rnd()))
+  elseif mob_id == 65 then
+    return makekey(mob_id,makevec2d(x,y),makeangle(rnd()))
+  else
+    return makemobile(mob_id,makevec2d(x,y),makeangle(rnd()))
+  end
+end
 
 -- END LIB
 
