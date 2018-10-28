@@ -41,16 +41,18 @@ function _init()
     reverse_strafe = not reverse_strafe
   end)
 
-  --debug=true
-  menuitem(2, "debug", function()
-    if debug then
-      debug = false
-    else
-      debug = true
-    end
-  end)
+  menuitem(2, "respawn", respawn)
 
-  menuitem(3, "respawn", respawn)
+  --debug=true
+  -- menuitem(3, "debug", function()
+  --   if debug then
+  --     debug = false
+  --   else
+  --     debug = true
+  --   end
+  -- end)
+
+
 
   local unfreeze_mobs_menu, freeze_mobs_menu
 
@@ -64,7 +66,8 @@ function _init()
     menuitem(4, "freeze mobs", freeze_mobs_menu)
   end
 
-  unfreeze_mobs_menu()
+  --uncomment for development
+  --unfreeze_mobs_menu()
 
   coin_count=0
   has_whisky=false
