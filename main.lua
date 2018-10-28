@@ -155,6 +155,8 @@ function respawn()
   mob_pos_map={}
   mob_round_map={}
   reset_mob_position_maps()
+
+  failed_blip_delaying=false
 end
 
 function draw_debug()
@@ -436,11 +438,18 @@ function tick_anxiety()
     return
   end
 
+  if is_panic_attack then
+    music(0,1000)
+  end
+
   is_panic_attack = false
 
   if current_anxiety >= 0 then
     current_anxiety-=.05+.005*current_anxiety
-    if current_anxiety < 0 then current_anxiety=0 end
+    if current_anxiety <= 0 then
+      music(-1,1000)
+      current_anxiety=0
+    end
   end
 end
 
@@ -489,11 +498,16 @@ function recalc_settings()
 end
 
 function add_anxiety()
+  if current_anxiety <= 0 then
+    music(0)
+  end
+
   current_anxiety+=3
   if current_anxiety >= max_anxiety then
     current_anxiety = max_anxiety
 
     if not is_panic_attack then
+      music(1,1000)
       reset_anxiety_offsets()
       panic_attack_remaining = panic_attack_duration
     end
@@ -682,6 +696,7 @@ function draw_anxiety_bar()
 end
 
 function add_coin()
+  play_pickup_blip()
   popup("fOUND A COIN!",30,10,true)
   coin_count+=1
 end
@@ -690,29 +705,48 @@ function clear_coins()
   coin_count=0
 end
 
+function play_pickup_blip()
+  sfx(4)
+end
+
+function play_failed_blip()
+  if not failed_blip_delaying then
+    sfx(5)
+    failed_blip_delaying = true
+    delays.make(function()
+      failed_blip_delaying=false
+    end, 2*30)
+  end
+end
+
 function add_key()
+  play_pickup_blip()
   popup("rECEIVED HOUSE KEY!",30,12,true)
   has_key=true
 end
 
 function fail_go_home()
+  play_failed_blip()
   popup("nEED THE KEY!",30,12,false,function()
-    popup("fIND IT AT THE LODGE",30,12)
+    popup("cHECK BEHIND THE LODGE",30,12,false,false,65)
   end,65)
 end
 
 function add_whisky()
+  play_pickup_blip()
   popup("pICKED UP WHISKY!",30,9,true)
   has_whisky=true
 end
 
 function fail_whisky()
+  play_failed_blip()
   popup("nOT ENOUGH COINS, NEED 5!",30,9,false,function()
-    popup("lOOK IN THE PARK",30,9)
+    popup("lOOK IN THE PARK",30,9,false,false,17)
   end,17)
 end
 
 function fail_steal_whisky()
+  play_failed_blip()
   popup("cAN'T LEAVE WITHOUT PAYING!",30,9,false,false,37)
 end
 
@@ -721,8 +755,9 @@ function has_unpaid_whisky()
 end
 
 function fail_enter_lodge()
+  play_failed_blip()
   popup("byob! nO FREELOADERS!",30,9,false,function()
-    popup("bUY AT THE STORE",30,9)
+    popup("bUY AT THE STORE",30,9,false,false,16)
   end,16)
 end
 
