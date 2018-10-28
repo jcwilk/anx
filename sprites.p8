@@ -857,7 +857,10 @@ makemobile = (function()
   end
 
   local function check_can_pass(mob,x,y)
-    return (not is_other_mob(mob,x,y)) and (( not is_sprite_wall(mapget(x,-y))) or (not is_sprite_wall_solid(mapget(x,-y)) ))
+    if(is_other_mob(mob,x,y)) return false
+    local sprite_id = mapget(x,-y)
+    if(not is_sprite_wall(sprite_id)) return true
+    return (not is_sprite_wall_solid(sprite_id)) and (not is_sprite_door(sprite_id))
   end
 
   local function reset_mob_path(mob)

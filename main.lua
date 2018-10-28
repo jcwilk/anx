@@ -9,7 +9,7 @@ function _init()
   orig_turn_amount=.01
   orig_speed = .1
   max_anxiety = 40
-  panic_attack_duration = 150
+  panic_attack_duration = 500
   panic_attack_remaining = panic_attack_duration --this gets overwritten anyways
 
   --debug stuff, disable for release
@@ -25,7 +25,7 @@ function _init()
 
   mobile_pool = make_pool()
   wall_pool = make_pool()
-  player = makeplayer(false,makevec2d(39.4567,-30.3974),makeangle(.17))
+  player = makeplayer(false,makevec2d(29.5244,-30.2927),makeangle(.7902))
 
   for x=0,127 do
     for y=0,-63,-1 do
@@ -67,13 +67,38 @@ function _init()
   unfreeze_mobs_menu()
 
   coin_count=0
-  has_whisky=true
-  has_key=true
+  has_whisky=false
+  has_key=false
   making_payment=false
   paid_for_whisky = false
   payment_progress = 0
 
   respawn()
+
+  setup_intro_text()
+end
+
+function setup_intro_text()
+  popup("iT'S BEEN A LONG NIGHT.",60,8,false,function()
+    popup("tHE LODGE IS SO TIRING.",60,8,false,function()
+      popup("yOU LOST YOUR KEY OUT BACK.",60,8,false,function()
+        popup("yOU'RE SPENT TO HELL.",60,8,false,function()
+          popup("yOU JUST WANT TO GO HOME.",90,5,false,function()
+          end)
+        end)
+      end)
+    end)
+  end)
+end
+
+function setup_win_text()
+  popup("yOUR BODY COLLAPSES INTO BED.",150,7,false,function()
+    popup("yOU TRY TO FORGET. . .",150,7,false,function()
+      popup(". . .THE CROWDS OF EYES.",250,7,false,function()
+        extcmd("reset")
+      end,81)
+    end,81)
+  end,81)
 end
 
 function respawn()
@@ -98,6 +123,8 @@ function respawn()
   popup_text = ""
   popup_color = 8
   popup_blinking = false
+  popup_on_complete = false
+  popup_sprite_id = false
 
   sky_color=1
   ground_color=0
@@ -516,6 +543,18 @@ function _update()
   if skip_update then
     return
   end
+
+  if (not has_won) and player.coords.x > 54 and player.coords.x < 58 and player.coords.y > -29 and player.coords.y < -26 then
+    has_won = true
+    setup_win_text()
+  end
+
+  if has_won then
+    update_popup()
+
+    return
+  end
+
   delays.process()
 
   local offset = makevec2d(0,0)
@@ -657,7 +696,9 @@ function add_key()
 end
 
 function fail_go_home()
-  popup("nEED THE KEY! gET AT LODGE",30,12)
+  popup("nEED THE KEY!",30,12,false,function()
+    popup("fIND IT AT THE LODGE",30,12)
+  end,65)
 end
 
 function add_whisky()
@@ -666,11 +707,13 @@ function add_whisky()
 end
 
 function fail_whisky()
-  popup("nOT ENOUGH COINS, NEED 5!",20,9)
+  popup("nOT ENOUGH COINS, NEED 5!",30,9,false,function()
+    popup("lOOK IN THE PARK",30,9)
+  end,17)
 end
 
 function fail_steal_whisky()
-  popup("cAN'T LEAVE WITHOUT PAYING!",30,9)
+  popup("cAN'T LEAVE WITHOUT PAYING!",30,9,false,false,37)
 end
 
 function has_unpaid_whisky()
@@ -678,7 +721,9 @@ function has_unpaid_whisky()
 end
 
 function fail_enter_lodge()
-  popup("byob! nO FREELOADERS!",30,9)
+  popup("byob! nO FREELOADERS!",30,9,false,function()
+    popup("bUY AT THE STORE",30,9)
+  end,16)
 end
 
 function make_payment()
@@ -703,16 +748,23 @@ function update_inventory()
   making_payment = false
 end
 
-function popup(text,duration,colr,blinking)
+function popup(text,duration,colr,blinking,on_complete,sprite_id)
   popup_duration = duration
   popup_text = text
   popup_color = colr
   popup_blinking = blinking
+  popup_on_complete = on_complete
+  popup_sprite_id = sprite_id
 end
 
 function update_popup()
   if popup_duration > 0 then
     popup_duration-=1
+    if popup_duration == 0 and popup_on_complete then
+      local callback = popup_on_complete
+      popup_on_complete = false
+      callback()
+    end
   end
 end
 
@@ -733,6 +785,12 @@ function draw_popup()
     fillp(0)
     rect(textxo-pb3,textyo-pb3,textxf+pb3,textyf+pb3,sky_color)
     rectfill(textxo-pb4,textyo-pb4,textxf+pb4,textyf+pb4,0)
+    if popup_sprite_id then
+      local offset=4
+      rectfill(58,textyo-pb1-12+offset,69,textyo-pb1-1+offset,0)
+      rect(58,textyo-pb1-12+offset,69,textyo-pb1-1+offset,1)
+      spr(popup_sprite_id,60,textyo-pb1-10+offset)
+    end
     if not popup_blinking or popup_duration % 10 < 9 then
       print(popup_text,textxo,textyo,popup_color)
     end
@@ -764,13 +822,17 @@ function _draw()
   if (skip_draw) then
     cls()
   else
-    draw_background()
+    if has_won then
+      cls()
+    else
+      draw_background()
 
-    raycast_walls()
+      raycast_walls()
 
-    draw_anxiety_bar()
+      draw_anxiety_bar()
 
-    draw_inventory()
+      draw_inventory()
+    end
 
     draw_popup()
   end
