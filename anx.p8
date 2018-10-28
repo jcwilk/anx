@@ -629,7 +629,11 @@ function cache_mob(mob,dir_vector,screenx,draw_width)
   }
   sides={}
   for col_i=0,7 do
-   pixel_color=sget(col_i+spritex,row_i+spritey)
+   if face_length < 0 then
+    pixel_color=sget(col_i+spritex,row_i+spritey)
+   else
+    pixel_color=sget(7-col_i+spritex,row_i+spritey)
+   end
    vertical_offset=verticaloffsets[col_i+1]
 
    if mob.sprite_id == debug_marker_id and pixel_color > 0 then
