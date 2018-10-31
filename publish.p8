@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 15
 __lua__
---anx
+--anx - github.com/jcwilk/anx
 --by john wilkinson
 -- start ext ./utils.lua
 function trunc(n)
@@ -1127,6 +1127,7 @@ height_ratio=orig_height_ratio
 turn_amount=orig_turn_amount
 speed = orig_speed
 is_panic_attack = false
+is_insane = false
 current_anxiety=0
 anxiety_recover_cooldown=0
 player_bearing_v=0
@@ -1404,8 +1405,11 @@ end
 is_panic_attack = false
 if current_anxiety >= 0 then
 current_anxiety-=.05+.005*current_anxiety
-if current_anxiety <= 0 then
+if is_insane and current_anxiety < anxiety_insanity_start then
+is_insane = false
 music(-1,1000)
+end
+if current_anxiety < 0 then
 current_anxiety=0
 end
 end
@@ -1420,24 +1424,31 @@ function tick_walking()
 walking_step+=.05
 if walking_step >= 1 then walking_step=0 end
 end
+downscale_anxiety = .4 
+function anxiety_factor_at(anxiety_level)
+return 1/(anxiety_level*downscale_anxiety/2+1)
+end
+anxiety_insanity_start=10
+anxiety_factor_insanity_start=anxiety_factor_at(anxiety_insanity_start)
 function recalc_settings()
 local anxiety_diff = current_anxiety - visual_anxiety
 local max_diff = max(abs(anxiety_diff/10),max_anxiety_diff)
 visual_anxiety+= mid(-max_anxiety_diff,anxiety_diff,max_anxiety_diff)
-local downscale_anxiety = .4 
-local anxiety_factor = -2/(-visual_anxiety*downscale_anxiety-2)
+local anxiety_factor = anxiety_factor_at(visual_anxiety)
 fisheye_ratio = (1 - anxiety_factor) * 3
 height_ratio = .44+.08*abs(sin(walking_step))+.15*anxiety_factor
 draw_distance = orig_draw_distance * (1/4 + 3/4*anxiety_factor)
 turn_amount = orig_turn_amount * (2 - anxiety_factor)
 speed = orig_speed * (2 - anxiety_factor)
-anxiety_vertical_offsets_scalar = 1 - anxiety_factor
+local insanity_gap = 1-anxiety_factor_insanity_start
+anxiety_vertical_offsets_scalar = max(0,1 - anxiety_factor - insanity_gap)/anxiety_factor_insanity_start
 end
 function add_anxiety()
-if current_anxiety <= 0 then
-music(0)
-end
 current_anxiety+=3
+if (not is_insane) and current_anxiety >= anxiety_insanity_start then
+music(0)
+is_insane = true
+end
 if current_anxiety >= max_anxiety then
 current_anxiety = max_anxiety
 if not is_panic_attack then
