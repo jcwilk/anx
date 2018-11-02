@@ -1432,6 +1432,8 @@ function respawn()
  reset_mob_position_maps()
 
  failed_blip_delaying=false
+
+ music(-1)
 end
 
 function draw_debug()

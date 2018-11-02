@@ -1165,6 +1165,7 @@ mob_pos_map={}
 mob_round_map={}
 reset_mob_position_maps()
 failed_blip_delaying=false
+music(-1)
 end
 function draw_debug()
 color(12)
